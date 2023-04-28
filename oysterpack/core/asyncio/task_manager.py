@@ -8,7 +8,9 @@ Used to schedule tasks as reliable “fire-and-forget” background tasks
 import asyncio
 import logging
 from asyncio import Task
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from typing import Any, TypeVar
 
 from ulid import ULID
 
@@ -18,6 +20,8 @@ TaskName = str
 
 __tasks: dict[TaskURI, set[Task]] = {}
 __logger = logging.getLogger(__name__)
+__thread_pool_executor = ThreadPoolExecutor()
+__process_pool_executor = ProcessPoolExecutor()
 
 
 def contains_task(task: Task) -> bool:
@@ -77,3 +81,28 @@ def schedule(task_uri: TaskURI, coroutine: Coroutine) -> Task:
     task.add_done_callback(remove_task)
 
     return task
+
+
+_T = TypeVar("_T")
+
+
+async def schedule_blocking_io_task(func: Callable[..., _T], *args: Any) -> _T:
+    """
+    Runs the function using a ThreadPoolExecutor
+    """
+    return await asyncio.get_running_loop().run_in_executor(
+        __thread_pool_executor, func, *args
+    )
+
+
+async def schedule_cpu_bound_task(func: Callable[..., _T], *args: Any) -> _T:
+    """
+    Runs the function using a ProcessPoolExecutor
+
+    NOTES
+    -----
+    All arg and return types must be able to be marshalled, i.e. pickled, across processes
+    """
+    return await asyncio.get_running_loop().run_in_executor(
+        __process_pool_executor, func, *args
+    )

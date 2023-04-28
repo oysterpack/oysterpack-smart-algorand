@@ -117,6 +117,20 @@ class TaskManagerTestCase(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0)
             self.assertEqual(0, len(task_manager.scheduled_task_counts()))
 
+    async def test_schedule_blocking_io_task(self) -> None:
+        logger = logging.getLogger(__name__)
+        await task_manager.schedule_blocking_io_task(logger.warning, "hello")
+
+        def add(x: int, y: int) -> int:
+            logger.info("%d + %d = %d", x, y, x + y)
+            return x + y
+
+        self.assertEqual(3, await task_manager.schedule_blocking_io_task(add, 1, 2))
+
+    async def test_schedule_cpu_bound_task(self) -> None:
+        rand_num = await task_manager.schedule_cpu_bound_task(random.randint, 1, 1000)
+        self.assertTrue(1 <= rand_num <= 1000)
+
 
 if __name__ == "__main__":
     unittest.main()
