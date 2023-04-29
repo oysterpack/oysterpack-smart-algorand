@@ -6,8 +6,7 @@ from typing import ClassVar, Self
 import msgpack
 
 from oysterpack.core.logging import configure_logging
-from oysterpack.message.message import Message
-from oysterpack.message.serializable import MessageType, Serializable
+from oysterpack.message import Message, MessageType, Serializable
 
 logger = logging.getLogger(__name__)
 configure_logging(level=logging.DEBUG)
