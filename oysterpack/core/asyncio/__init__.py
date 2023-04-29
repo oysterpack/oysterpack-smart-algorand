@@ -1,0 +1,5 @@
+import uvloop
+
+# uvloop is a fast, drop-in replacement of the built-in asyncio event loop.
+# uvloop is implemented in Cython and uses libuv under the hood.
+uvloop.install()

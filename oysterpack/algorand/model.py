@@ -1,22 +1,32 @@
 """
-Algorand domain model for enhanced type safety
+Algorand typesafe domain model
 """
 
 from dataclasses import dataclass
-from typing import NewType, Self, cast
+from typing import Self, cast
 
 from algosdk import mnemonic
 from algosdk.logic import get_application_address
 
-Address = NewType("Address", str)
 
-AssetId = NewType("AssetId", int)
+class Address(str):
+    pass
 
-BoxKey = NewType("BoxKey", bytes)
 
-MicroAlgos = NewType("MicroAlgos", int)
+class AssetId(int):
+    pass
 
-TxnId = NewType("TxnId", str)
+
+class BoxKey(bytes):
+    pass
+
+
+class MicroAlgos(int):
+    pass
+
+
+class TxnId(str):
+    pass
 
 
 class AppId(int):
@@ -124,7 +134,11 @@ class Mnemonic:
         return mnemonic.to_master_derivation_key(str(self))
 
     def to_private_key(self) -> str:
-        """Converts the word list to the base64 encoded account private key"""
+        """
+        Converts the word list to the base64 encoded account private key
+
+        https://developer.algorand.org/docs/get-details/accounts/#transformation-private-key-to-base64-private-key
+        """
         return mnemonic.to_private_key(str(self))
 
     def __str__(self) -> str:

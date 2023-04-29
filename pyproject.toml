@@ -12,6 +12,7 @@ beaker-pyteal = "^1.0.0"
 algokit-utils = "^1.0.1"
 python-ulid = "^1.1.0"
 websockets = "^11.0.2"
+uvloop = "^0.17.0"
 
 [tool.poetry.group.dev.dependencies]
 black = {extras = ["d"], version = "*"}
