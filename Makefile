@@ -11,9 +11,9 @@ format:
 
 # enforces style guide
 check:
-	ruff check oysterpack
+	ruff check oysterpack --fix
 	mypy oysterpack
-	ruff check tests
+	ruff check tests --fix
 	mypy tests
 
 pydoc:

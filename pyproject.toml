@@ -15,10 +15,11 @@ websockets = "^11.0.2"
 
 [tool.poetry.group.dev.dependencies]
 black = {extras = ["d"], version = "*"}
-ruff = ">=0.0.260"
+ruff = "*"
 mypy = "*"
 pip-audit = "*"
-coverage = "^7.2.3"
+coverage = "*"
+msgpack-types = "*"
 
 [build-system]
 requires = ["poetry-core"]
