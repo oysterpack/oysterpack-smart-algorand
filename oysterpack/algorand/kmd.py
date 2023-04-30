@@ -26,7 +26,6 @@ class Wallet:
 
 
 class KmdService:
-
     def __init__(self, url: str, token: str):
         self._kmd_client = kmd.KMDClient(kmd_address=url, kmd_token=token)
 
@@ -37,3 +36,33 @@ class KmdService:
 
         wallets = await schedule_blocking_io_task(self._kmd_client.list_wallets)
         return list(map(Wallet._to_wallet, wallets))
+
+    async def get_wallet(self, name: str) -> Wallet | None:
+        """
+        Returns wallet for the specified name.
+
+        :return : None if the wallet does not exist
+        """
+        for wallet in await self.list_wallets():
+            if wallet.name == name:
+                return wallet
+
+        return None
+
+    async def create_wallet(self, name: str, password: str) -> Wallet:
+        """
+        Creates a new wallet using the specified name and password.
+
+        :param name: wallet name - leading and trailing whitespace will be stripped
+        :raises KMDHTTPError:
+        """
+        name = name.strip()
+        if len(name) == 0:
+            raise ValueError("name cannot be blank")
+        password = password.strip()
+        if len(password) == 0:
+            raise ValueError("password cannot be blank")
+        new_wallet = await schedule_blocking_io_task(
+            self._kmd_client.create_wallet, name, password
+        )
+        return Wallet._to_wallet(new_wallet)
