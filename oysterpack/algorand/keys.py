@@ -64,6 +64,10 @@ class AlgoPublicKeys:
     encryption_address: EncryptionAddress
 
 
+# https://developer.algorand.org/docs/get-details/accounts/#transformation-private-key-to-base64-private-key
+_algorand_base64_encoded_private_key_len = 88
+
+
 class AlgoPrivateKey(PrivateKey, TransactionSigner):
     """
     Algorand private keys can be used to sign and encrypt messages.
@@ -90,6 +94,10 @@ class AlgoPrivateKey(PrivateKey, TransactionSigner):
             algo_private_key = generate_account()[0]
 
         if isinstance(algo_private_key, str):
+            if len(algo_private_key) != _algorand_base64_encoded_private_key_len:
+                raise ValueError(
+                    f"invalid Algorand private key - expected length is {_algorand_base64_encoded_private_key_len}"
+                )
             super().__init__(
                 base64.b64decode(algo_private_key)[: constants.key_len_bytes]
             )
@@ -103,7 +111,9 @@ class AlgoPrivateKey(PrivateKey, TransactionSigner):
             private_key_bytes = base64.b64decode(private_key)
             super().__init__(private_key_bytes[: constants.key_len_bytes])
         else:
-            raise ValueError("invalid private_key type - must be str | bytes")
+            raise ValueError(
+                "invalid private_key type - must be str | bytes | Mnemonic"
+            )
 
     @property
     def mnemonic(self) -> Mnemonic:

@@ -5,7 +5,7 @@ Algorand typesafe domain model
 from dataclasses import dataclass
 from typing import Self, cast
 
-from algosdk import mnemonic
+from algosdk import constants, mnemonic
 from algosdk.logic import get_application_address
 
 
@@ -115,9 +115,9 @@ class Mnemonic:
     @classmethod
     def from_private_key(cls, key: bytes) -> Self:
         """
-        :param key: private key bytes
+        :param key: first 32 bytes are used as the private key
         """
-        word_list = mnemonic._from_key(key)
+        word_list = mnemonic._from_key(key[: constants.key_len_bytes])
         return cls.from_word_list(word_list)
 
     def __post_init__(self):
