@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Self
 
 from algosdk import kmd
+from password_validator import PasswordValidator  # type: ignore
 
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
 
@@ -54,6 +55,10 @@ class KmdService:
         Creates a new wallet using the specified name and password.
 
         :param name: wallet name - leading and trailing whitespace will be stripped
+        :param password: requires a strong password which meets the following criteria:
+                         - length must be 30-80
+                         - must contain uppercase, lowercase, digits, and symbols
+                         - must have no spaces
         :raises KMDHTTPError:
         """
         name = name.strip()
@@ -65,4 +70,20 @@ class KmdService:
         new_wallet = await schedule_blocking_io_task(
             self._kmd_client.create_wallet, name, password
         )
+
+        password_validator = (
+            PasswordValidator()
+            .min(30)
+            .max(80)
+            .uppercase()
+            .lowercase()
+            .symbols()
+            .digits()
+            .has()
+            .no()
+            .spaces()
+        )
+        if not password_validator.validate(password):
+            raise ValueError("password failed validation")
+
         return Wallet._to_wallet(new_wallet)

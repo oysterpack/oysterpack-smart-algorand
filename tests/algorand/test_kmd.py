@@ -41,7 +41,8 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
         with self.subTest("create new wallet with unique name"):
             name = str(ULID())
-            password = str(ULID())
+            password = f"{ULID()}{str(ULID()).lower()}!@{ULID()}"
+            print(password)
             wallet = await kmd_service.create_wallet(name=name, password=password)
             self.assertEqual(name, wallet.name)
             wallet_2 = await kmd_service.get_wallet(name)
@@ -56,22 +57,42 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
             )
 
         with self.subTest("create wallet with blank name"):
+            name_blank_err_msg = "name cannot be blank"
             with self.assertRaises(ValueError) as err:
                 await kmd_service.create_wallet(name="", password=password)
-            self.assertEqual("name cannot be blank", str(err.exception))
+            self.assertEqual(name_blank_err_msg, str(err.exception))
 
             with self.assertRaises(ValueError) as err:
                 await kmd_service.create_wallet(name=" ", password=password)
-            self.assertEqual("name cannot be blank", str(err.exception))
+            self.assertEqual(name_blank_err_msg, str(err.exception))
 
         with self.subTest("create wallet with blank password"):
+            password_blank_err_msg = "password cannot be blank"
             with self.assertRaises(ValueError) as err:
                 await kmd_service.create_wallet(name=name, password="")
-            self.assertEqual("password cannot be blank", str(err.exception))
+            self.assertEqual(password_blank_err_msg, str(err.exception))
 
             with self.assertRaises(ValueError) as err:
                 await kmd_service.create_wallet(name=name, password=" ")
-            self.assertEqual("password cannot be blank", str(err.exception))
+            self.assertEqual(password_blank_err_msg, str(err.exception))
+
+        password_failed_err_msg = "password failed validation"
+        with self.subTest("password too short"):
+            with self.assertRaises(ValueError) as err:
+                await kmd_service.create_wallet(name=str(ULID()), password="aA1!")
+            self.assertEqual(password_failed_err_msg, str(err.exception))
+
+        with self.subTest("password has spaces"):
+            password = f"{ULID()}{str(ULID()).lower()} !@"
+            with self.assertRaises(ValueError) as err:
+                await kmd_service.create_wallet(name=str(ULID()), password=password)
+            self.assertEqual(password_failed_err_msg, str(err.exception))
+
+        with self.subTest("password too long"):
+            password = f"{ULID()}{str(ULID()).lower()}{ULID()}{ULID()}!"
+            with self.assertRaises(ValueError) as err:
+                await kmd_service.create_wallet(name=str(ULID()), password=password)
+            self.assertEqual(password_failed_err_msg, str(err.exception))
 
 
 if __name__ == "__main__":
