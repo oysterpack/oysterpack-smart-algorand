@@ -9,6 +9,7 @@ from ulid import ULID
 from oysterpack.algorand.keys import AlgoPrivateKey
 from oysterpack.algorand.kmd import KmdService
 
+WALLET_WITH_SAME_NAME_ALREADY_EXISTS = "wallet with same name already exists"
 
 class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_list_wallets(self):
@@ -54,7 +55,7 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 await kmd_service.create_wallet(name=name, password=password)
             err_object = json.loads(str(err.exception))
             self.assertEqual(
-                "wallet with same name already exists", err_object["message"]
+                WALLET_WITH_SAME_NAME_ALREADY_EXISTS, err_object["message"]
             )
 
         with self.subTest("create wallet with blank name"):
@@ -141,7 +142,7 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 )
             err_object = json.loads(str(err.exception))
             self.assertEqual(
-                "wallet with same name already exists", err_object["message"]
+                WALLET_WITH_SAME_NAME_ALREADY_EXISTS, err_object["message"]
             )
 
         with self.subTest("recover wallet again using a different name"):
@@ -286,7 +287,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 await wallet_session.rename(sandbox.kmd.DEFAULT_KMD_WALLET_NAME)
             err_object = json.loads(str(err.exception))
             self.assertEqual(
-                "wallet with same name already exists", err_object["message"]
+                WALLET_WITH_SAME_NAME_ALREADY_EXISTS, err_object["message"]
             )
 
 
