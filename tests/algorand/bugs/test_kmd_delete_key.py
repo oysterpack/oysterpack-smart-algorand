@@ -5,7 +5,7 @@ from beaker import sandbox
 
 
 class KmdWalletDeleteKeyTestCase(unittest.TestCase):
-    @unittest.skip("algosdk bug report")
+    @unittest.skip("https://github.com/algorand/go-algorand/issues/5346")
     def test_delete_key(self):
         kmd_client = sandbox.kmd.get_client()
 
