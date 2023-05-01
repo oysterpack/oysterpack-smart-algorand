@@ -234,7 +234,6 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
 class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        # SETUP
         self.kmd_service = KmdService(
             url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
             token=sandbox.kmd.DEFAULT_KMD_TOKEN,
@@ -291,12 +290,12 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 WALLET_WITH_SAME_NAME_ALREADY_EXISTS, err_object["message"]
             )
 
-    async def test_generate_account(self):
+    async def test_account_management(self):
         wallet_session = await self.kmd_service.connect(self.name, self.password)
         self.assertEqual(0, len(await wallet_session.list_accounts()))
 
-        account_address = await wallet_session.generate_account()
-        self.assertTrue(await wallet_session.contains_account(account_address))
+        address = await wallet_session.generate_account()
+        self.assertTrue(await wallet_session.contains_account(address))
 
         with self.subTest(
             "`contains_account` should return false for unregistered accounts"
@@ -304,6 +303,14 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(
                 await wallet_session.contains_account(AlgoPrivateKey().signing_address)
             )
+
+        with self.subTest("delete a registered account"):
+            await wallet_session.delete_account(address)
+            self.assertFalse(await wallet_session.contains_account(address))
+            await wallet_session.delete_account(address)
+
+        with self.subTest("deleting an unregistered account is a noop"):
+            await wallet_session.delete_account(address)
 
 
 if __name__ == "__main__":

@@ -86,6 +86,12 @@ class WalletSession:
         """
         return address in await self.list_accounts()
 
+    async def delete_account(self, address: Address):
+        """
+        Delete the account from the wallet for the specified address.
+        """
+        await schedule_blocking_io_task(self._wallet.delete_key, address)
+
 
 @dataclass(slots=True)
 class Wallet:
