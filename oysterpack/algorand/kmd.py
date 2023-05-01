@@ -79,11 +79,12 @@ class KmdService:
         password = password.strip()
         if len(password) == 0:
             raise ValueError("password cannot be blank")
-        new_wallet = await schedule_blocking_io_task(
-            self._kmd_client.create_wallet, name, password
-        )
 
         if self._password_validator and not self._password_validator.validate(password):
             raise ValueError("password failed validation")
+
+        new_wallet = await schedule_blocking_io_task(
+            self._kmd_client.create_wallet, name, password
+        )
 
         return Wallet._to_wallet(new_wallet)
