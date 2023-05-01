@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Self
 
 from algosdk import kmd
-from password_validator import PasswordValidator  # type: ignore
+from password_validator import PasswordValidator
 
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
 
@@ -27,8 +27,20 @@ class Wallet:
 
 
 class KmdService:
-    def __init__(self, url: str, token: str):
+    """
+    KMD service
+    """
+
+    def __init__(
+        self, url: str, token: str, password_validator: PasswordValidator | None = None
+    ):
+        """
+        :param url: KMD connection URL
+        :param token: KMD API token
+        :param password_validator: used when creating new wallets to apply password constraints
+        """
         self._kmd_client = kmd.KMDClient(kmd_address=url, kmd_token=token)
+        self._password_validator = password_validator
 
     async def list_wallets(self) -> list[Wallet]:
         """
@@ -71,19 +83,7 @@ class KmdService:
             self._kmd_client.create_wallet, name, password
         )
 
-        password_validator = (
-            PasswordValidator()
-            .min(30)
-            .max(80)
-            .uppercase()
-            .lowercase()
-            .symbols()
-            .digits()
-            .has()
-            .no()
-            .spaces()
-        )
-        if not password_validator.validate(password):
+        if self._password_validator and not self._password_validator.validate(password):
             raise ValueError("password failed validation")
 
         return Wallet._to_wallet(new_wallet)

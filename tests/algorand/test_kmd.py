@@ -3,6 +3,7 @@ import unittest
 
 from algosdk.error import KMDHTTPError
 from beaker import sandbox
+from password_validator import PasswordValidator
 from ulid import ULID
 
 from oysterpack.algorand.kmd import KmdService
@@ -41,7 +42,7 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
         with self.subTest("create new wallet with unique name"):
             name = str(ULID())
-            password = f"{ULID()}{str(ULID()).lower()}!@{ULID()}"
+            password = str(ULID())
             print(password)
             wallet = await kmd_service.create_wallet(name=name, password=password)
             self.assertEqual(name, wallet.name)
@@ -75,6 +76,25 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError) as err:
                 await kmd_service.create_wallet(name=name, password=" ")
             self.assertEqual(password_blank_err_msg, str(err.exception))
+
+    async def test_wallet_creation_with_password_validator(self):
+        password_validator = (
+            PasswordValidator()
+            .min(30)
+            .max(80)
+            .uppercase()
+            .lowercase()
+            .symbols()
+            .digits()
+            .has()
+            .no()
+            .spaces()
+        )
+        kmd_service = KmdService(
+            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
+            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            password_validator=password_validator,
+        )
 
         password_failed_err_msg = "password failed validation"
         with self.subTest("password too short"):
