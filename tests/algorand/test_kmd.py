@@ -230,5 +230,65 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(password_failed_err_msg, str(err.exception))
 
 
+class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        # SETUP
+        self.kmd_service = KmdService(
+            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
+            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+        )
+
+        # create a new wallet
+        self.name = str(ULID())
+        self.password = str(ULID())
+        self.wallet = await self.kmd_service.create_wallet(
+            name=self.name,
+            password=self.password,
+        )
+
+    async def test_connect(self):
+        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        self.assertEqual(self.name, wallet_session.wallet_name)
+
+    async def test_export_master_derivation_key(self):
+        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        mdk = await wallet_session.export_master_derivation_key()
+
+        # recover the wallet using the master derivation key with a different name
+        name = str(ULID())
+        await self.kmd_service.recover_wallet(
+            name=name,
+            password=self.password,
+            master_derivation_key=mdk,
+        )
+
+    async def test_rename(self):
+        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        new_name = str(ULID())
+        await wallet_session.rename(new_name)
+        self.assertEqual(new_name, wallet_session.wallet_name)
+
+        with self.subTest("blank name"):
+            with self.assertRaises(ValueError) as err:
+                await wallet_session.rename(" ")
+            self.assertEqual("wallet name cannot be blank", str(err.exception))
+
+        with self.subTest("rename to same name"):
+            with self.assertRaises(ValueError) as err:
+                await wallet_session.rename(new_name)
+            self.assertEqual(
+                "new wallet name cannot be the same as the current wallet name",
+                str(err.exception),
+            )
+
+        with self.subTest("rename using a name that already exists"):
+            with self.assertRaises(KMDHTTPError) as err:
+                await wallet_session.rename(sandbox.kmd.DEFAULT_KMD_WALLET_NAME)
+            err_object = json.loads(str(err.exception))
+            self.assertEqual(
+                "wallet with same name already exists", err_object["message"]
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

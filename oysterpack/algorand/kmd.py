@@ -7,10 +7,61 @@ from dataclasses import dataclass
 from typing import Any, Self
 
 from algosdk import kmd
+from algosdk.wallet import Wallet as KMDWallet
 from password_validator import PasswordValidator
 
 from oysterpack.algorand import Mnemonic
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
+
+
+class WalletSession:
+    """
+    Represents an open wallet connection
+    """
+
+    def __init__(self, wallet: KMDWallet):
+        self._wallet = wallet
+
+    def __del__(self):
+        """
+        Releases the wallet handle and effectively disconnects the wallet.
+
+        Ensures that the wallet handle is released when the object is finalized, i.e., garbage collected,
+        to prevent resource leaks on the KMD server
+        """
+
+        if self._wallet.handle:
+            try:
+                self._wallet.release_handle()
+            except Exception:
+                ...
+
+    @property
+    def wallet_name(self) -> str:
+        return self._wallet.name
+
+    async def export_master_derivation_key(self) -> Mnemonic:
+        """
+        Exports the wallets master derivation key in mnemonic form.
+        The master derivation key is used to recover the wallet.
+        """
+        word_list = await schedule_blocking_io_task(self._wallet.get_mnemonic)
+        return Mnemonic.from_word_list(word_list)
+
+    async def rename(self, new_name: str) -> None:
+        """
+        :param new_name: must not be blank. Surrounding whitespace is stripped.
+        """
+
+        new_name = new_name.strip()
+        if not new_name:
+            raise ValueError("wallet name cannot be blank")
+        if new_name == self._wallet.name:
+            raise ValueError(
+                "new wallet name cannot be the same as the current wallet name"
+            )
+
+        await schedule_blocking_io_task(self._wallet.rename, new_name)
 
 
 @dataclass(slots=True)
@@ -124,3 +175,20 @@ class KmdService:
             master_derivation_key.to_kmd_master_derivation_key(),
         )
         return Wallet._to_wallet(recovered_wallet)
+
+    async def connect(self, name: str, password: str) -> WalletSession:
+        """
+        Connect to a wallet
+
+        :param name: wallet name
+        :param password: wallet password
+        :return: WalletSession
+        """
+
+        kmd_wallet = await schedule_blocking_io_task(
+            KMDWallet,
+            name,
+            password,
+            self._kmd_client,
+        )
+        return WalletSession(kmd_wallet)
