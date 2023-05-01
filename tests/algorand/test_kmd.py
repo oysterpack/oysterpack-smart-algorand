@@ -11,6 +11,7 @@ from oysterpack.algorand.kmd import KmdService
 
 WALLET_WITH_SAME_NAME_ALREADY_EXISTS = "wallet with same name already exists"
 
+
 class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_list_wallets(self):
         kmd_service = KmdService(
@@ -288,6 +289,20 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             err_object = json.loads(str(err.exception))
             self.assertEqual(
                 WALLET_WITH_SAME_NAME_ALREADY_EXISTS, err_object["message"]
+            )
+
+    async def test_generate_account(self):
+        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        self.assertEqual(0, len(await wallet_session.list_accounts()))
+
+        account_address = await wallet_session.generate_account()
+        self.assertTrue(await wallet_session.contains_account(account_address))
+
+        with self.subTest(
+            "`contains_account` should return false for unregistered accounts"
+        ):
+            self.assertFalse(
+                await wallet_session.contains_account(AlgoPrivateKey().signing_address)
             )
 
 
