@@ -1,8 +1,13 @@
+import decimal
 import json
 import unittest
 
+from algosdk.atomic_transaction_composer import (
+    AtomicTransactionComposer,
+    TransactionWithSigner,
+)
 from algosdk.error import KMDHTTPError
-from algosdk.transaction import PaymentTxn
+from algosdk.transaction import PaymentTxn, wait_for_confirmation
 from algosdk.util import algos_to_microalgos
 from beaker import sandbox
 from password_validator import PasswordValidator
@@ -10,6 +15,8 @@ from ulid import ULID
 
 from oysterpack.algorand.keys import AlgoPrivateKey
 from oysterpack.algorand.kmd import KmdService
+from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
+from tests.test_support import fund_account
 
 WALLET_WITH_SAME_NAME_ALREADY_EXISTS = "wallet with same name already exists"
 
@@ -326,7 +333,6 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
         wallet_session = await self.kmd_service.connect(
             self.name, self.password, sandbox.get_algod_client()
         )
-        self.assertEqual(0, len(await wallet_session.list_accounts()))
 
         sender = await wallet_session.generate_account()
         private_key_mnemonic = await wallet_session.export_private_key(sender)
@@ -344,6 +350,63 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
         signed_txn_1 = await wallet_session.sign_transaction(payment_txn)
         signed_txn_2 = payment_txn.sign(private_key_mnemonic.to_private_key())
         self.assertEqual(signed_txn_1.signature, signed_txn_2.signature)
+
+    async def test_sign_transaction(self):
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
+        sender = await wallet_session.generate_account()
+        await fund_account(sender)
+
+        auth_account = await wallet_session.generate_account()
+        await fund_account(auth_account)
+
+        await wallet_session.rekey(sender, auth_account)
+
+        with self.subTest("sign transaction from rekeyed account"):
+            receiver = await wallet_session.generate_account()
+            txn = PaymentTxn(
+                sender=sender,
+                receiver=receiver,
+                amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
+                sp=await schedule_blocking_io_task(
+                    sandbox.get_algod_client().suggested_params
+                ),
+            )
+
+            signed_txn = await wallet_session.sign_transaction(txn)
+            # verify signed transaction by sending it and ensuring it is successful
+            algod_client = sandbox.get_algod_client()
+            txid = await schedule_blocking_io_task(
+                algod_client.send_transaction, signed_txn
+            )
+            await schedule_blocking_io_task(wait_for_confirmation, algod_client, txid)
+
+    async def test_transaction_signer(self):
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
+        sender = await wallet_session.generate_account()
+        await fund_account(sender)
+
+        receiver = await wallet_session.generate_account()
+        txn = PaymentTxn(
+            sender=sender,
+            receiver=receiver,
+            amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
+            sp=await schedule_blocking_io_task(
+                sandbox.get_algod_client().suggested_params
+            ),
+        )
+
+        atc = AtomicTransactionComposer()
+        atc.add_transaction(
+            TransactionWithSigner(
+                txn,
+                wallet_session,
+            )
+        )
+        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
 
 
 if __name__ == "__main__":

@@ -7,23 +7,35 @@ from dataclasses import dataclass
 from typing import Any, Self
 
 from algosdk import kmd, mnemonic
+from algosdk.atomic_transaction_composer import TransactionSigner
 from algosdk.error import KMDHTTPError
-from algosdk.transaction import SignedTransaction, Transaction
+from algosdk.transaction import (
+    LogicSigTransaction,
+    MultisigTransaction,
+    SignedTransaction,
+    Transaction,
+    wait_for_confirmation,
+)
 from algosdk.v2client.algod import AlgodClient
 from algosdk.wallet import Wallet as KMDWallet
 from password_validator import PasswordValidator
 
-from oysterpack.algorand import Address, Mnemonic
+from oysterpack.algorand import Address, Mnemonic, TxnId
 from oysterpack.algorand.accounts import get_auth_address
-from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
+from oysterpack.algorand.transactions import (
+    create_rekey_txn,
+    suggested_params_with_flat_flee,
+)
+from oysterpack.core.asyncio.task_manager import schedule, schedule_blocking_io_task
 
 
-class WalletSession:
+class WalletSession(TransactionSigner):
     """
     Represents an open wallet connection
     """
 
     def __init__(self, wallet: KMDWallet, algod_client: AlgodClient):
+        super().__init__()
         self._wallet = wallet
         self._algod_client = algod_client
 
@@ -37,9 +49,26 @@ class WalletSession:
 
         if self._wallet.handle:
             try:
-                self._wallet.release_handle()
+                schedule(
+                    "WalletSession/del",
+                    schedule_blocking_io_task(self._wallet.release_handle),
+                )
             except Exception:
                 ...
+
+    def sign_transactions(
+        self,
+        txn_group: list[Transaction],
+        indexes: list[int],
+    ) -> list[SignedTransaction | LogicSigTransaction | MultisigTransaction]:
+        """
+
+        :param txn_group:
+        :param indexes: array of indexes in the atomic transaction group that should be signed
+        :return:
+        """
+
+        return [self._wallet.sign_transaction(txn_group[i]) for i in indexes]
 
     @property
     def wallet_name(self) -> str:
@@ -113,10 +142,11 @@ class WalletSession:
         """
 
         signing_address = await get_auth_address(
-            Address(txn.sender), self._algod_client
+            Address(txn.sender),
+            self._algod_client,
         )
         if signing_address == txn.sender:
-            return self._wallet.sign_transaction(txn)
+            return await schedule_blocking_io_task(self._wallet.sign_transaction, txn)
 
         # the account has been rekeyed, and must instead be signed by the authorized account
         # TODO: waiting on Algorand bug fix
@@ -140,11 +170,35 @@ class WalletSession:
                 txn,
                 signing_address,
             )
-        except KMDHTTPError as err:
-            if str(err).index("could not decode request body") != -1:
-                # the workaround for the above issue is to export the key and sign the transaction on the client side
-                return txn.sign(self._wallet.export_key(signing_address))
-            raise
+        except KMDHTTPError:
+            # fallback to exporting the key and signing the transaction on the client side
+            return txn.sign(
+                await schedule_blocking_io_task(
+                    self._wallet.export_key,
+                    signing_address,
+                )
+            )
+
+    async def rekey(self, account: Address, to: Address) -> TxnId:
+        """
+        Rekey the account to the specified account.
+
+        :param account: rekey from this account
+        :param to: rekey to this account
+        :param algod_client: AlgodClient
+        """
+
+        txn = create_rekey_txn(
+            account=account,
+            rekey_to=to,
+            suggested_params=await suggested_params_with_flat_flee(self._algod_client),
+        )
+        signed_txn = await self.sign_transaction(txn)
+        txid = await schedule_blocking_io_task(
+            self._algod_client.send_transaction, signed_txn
+        )
+        await schedule_blocking_io_task(wait_for_confirmation, self._algod_client, txid)
+        return TxnId(txid)
 
 
 @dataclass(slots=True)
