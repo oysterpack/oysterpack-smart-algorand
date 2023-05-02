@@ -148,6 +148,11 @@ class WalletSession(TransactionSigner):
         if signing_address == txn.sender:
             return await schedule_blocking_io_task(self._wallet.sign_transaction, txn)
 
+        if not await self.contains_account(signing_address):
+            raise AssertionError(
+                "sender is rekeyed, and the wallet does not contain authorized account"
+            )
+
         # the account has been rekeyed, and must instead be signed by the authorized account
         # TODO: waiting on Algorand bug fix
         # The below code should work and is the preferred method, but currently fails
@@ -199,6 +204,16 @@ class WalletSession(TransactionSigner):
         )
         await schedule_blocking_io_task(wait_for_confirmation, self._algod_client, txid)
         return TxnId(txid)
+
+    async def rekey_back(self, account: Address) -> TxnId:
+        """
+        Rekeys the account back to itself.
+
+        Notes
+        ------
+        - The account that it rekeyed to must exist in the same wallet
+        """
+        return await self.rekey(account, account)
 
 
 @dataclass(slots=True)

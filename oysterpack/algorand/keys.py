@@ -209,6 +209,10 @@ class AlgoPrivateKey(PrivateKey, TransactionSigner):
     ) -> list[GenericSignedTransaction]:
         stxns = []
         for i in indexes:
-            stxn = txn_group[i].sign(base64.b64encode(bytes(self)).decode())
+            stxn = txn_group[i].sign(
+                base64.b64encode(
+                    bytes(self) + bytes(self.signing_key.verify_key)
+                ).decode()
+            )
             stxns.append(stxn)
         return stxns

@@ -53,5 +53,7 @@ def create_rekey_back_txn(
     """
 
     return create_rekey_txn(
-        account=account, rekey_to=account, suggested_params=suggested_params
+        account=account,
+        rekey_to=account,
+        suggested_params=suggested_params,
     )

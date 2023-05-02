@@ -13,6 +13,7 @@ from beaker import sandbox
 from password_validator import PasswordValidator
 from ulid import ULID
 
+from oysterpack.algorand.accounts import get_auth_address
 from oysterpack.algorand.keys import AlgoPrivateKey
 from oysterpack.algorand.kmd import KmdService
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
@@ -382,6 +383,19 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             )
             await schedule_blocking_io_task(wait_for_confirmation, algod_client, txid)
 
+        with self.subTest(
+            "sign transaction with a rekeyed account that doesn't exist in the waller"
+        ):
+            auth_account_2 = AlgoPrivateKey()
+            await wallet_session.rekey(sender, auth_account_2.signing_address)
+
+            with self.assertRaises(AssertionError) as err:
+                await wallet_session.sign_transaction(txn)
+            self.assertEqual(
+                "sender is rekeyed, and the wallet does not contain authorized account",
+                str(err.exception),
+            )
+
     async def test_transaction_signer(self):
         wallet_session = await self.kmd_service.connect(
             self.name, self.password, sandbox.get_algod_client()
@@ -407,6 +421,26 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             )
         )
         await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+
+    async def test_rekeying(self):
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
+        sender = await wallet_session.generate_account()
+        await fund_account(sender)
+
+        auth_account = await wallet_session.generate_account()
+        await fund_account(auth_account)
+
+        await wallet_session.rekey(sender, auth_account)
+        self.assertEqual(
+            auth_account, await get_auth_address(sender, sandbox.get_algod_client())
+        )
+
+        await wallet_session.rekey_back(sender)
+        self.assertEqual(
+            sender, await get_auth_address(sender, sandbox.get_algod_client())
+        )
 
 
 if __name__ == "__main__":
