@@ -2,6 +2,8 @@ import json
 import unittest
 
 from algosdk.error import KMDHTTPError
+from algosdk.transaction import PaymentTxn
+from algosdk.util import algos_to_microalgos
 from beaker import sandbox
 from password_validator import PasswordValidator
 from ulid import ULID
@@ -248,11 +250,15 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_connect(self):
-        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
         self.assertEqual(self.name, wallet_session.wallet_name)
 
     async def test_export_master_derivation_key(self):
-        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
         mdk = await wallet_session.export_master_derivation_key()
 
         # recover the wallet using the master derivation key with a different name
@@ -264,7 +270,9 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_rename(self):
-        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
         new_name = str(ULID())
         await wallet_session.rename(new_name)
         self.assertEqual(new_name, wallet_session.wallet_name)
@@ -291,7 +299,9 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_account_management(self):
-        wallet_session = await self.kmd_service.connect(self.name, self.password)
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
         self.assertEqual(0, len(await wallet_session.list_accounts()))
 
         address = await wallet_session.generate_account()
@@ -311,6 +321,29 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
         with self.subTest("deleting an unregistered account is a noop"):
             await wallet_session.delete_account(address)
+
+    async def test_export_private_key(self):
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
+        self.assertEqual(0, len(await wallet_session.list_accounts()))
+
+        sender = await wallet_session.generate_account()
+        private_key_mnemonic = await wallet_session.export_private_key(sender)
+
+        # verify that the exported private key corresponds to the account
+        # by signing a transaction using the KMD wallet and directly using the exported the private key
+        # the signatures should match
+        receiver = AlgoPrivateKey()
+        payment_txn = PaymentTxn(
+            sender=sender,
+            receiver=receiver.signing_address,
+            amt=algos_to_microalgos(1),
+            sp=sandbox.get_algod_client().suggested_params(),
+        )
+        signed_txn_1 = await wallet_session.sign_transaction(payment_txn)
+        signed_txn_2 = payment_txn.sign(private_key_mnemonic.to_private_key())
+        self.assertEqual(signed_txn_1.signature, signed_txn_2.signature)
 
 
 if __name__ == "__main__":

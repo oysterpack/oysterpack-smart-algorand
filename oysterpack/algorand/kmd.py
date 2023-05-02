@@ -6,11 +6,15 @@ https://developer.algorand.org/docs/get-details/accounts/create/#wallet-derived-
 from dataclasses import dataclass
 from typing import Any, Self
 
-from algosdk import kmd
+from algosdk import kmd, mnemonic
+from algosdk.error import KMDHTTPError
+from algosdk.transaction import SignedTransaction, Transaction
+from algosdk.v2client.algod import AlgodClient
 from algosdk.wallet import Wallet as KMDWallet
 from password_validator import PasswordValidator
 
 from oysterpack.algorand import Address, Mnemonic
+from oysterpack.algorand.accounts import get_auth_address
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
 
 
@@ -19,8 +23,9 @@ class WalletSession:
     Represents an open wallet connection
     """
 
-    def __init__(self, wallet: KMDWallet):
+    def __init__(self, wallet: KMDWallet, algod_client: AlgodClient):
         self._wallet = wallet
+        self._algod_client = algod_client
 
     def __del__(self):
         """
@@ -92,6 +97,55 @@ class WalletSession:
         """
         await schedule_blocking_io_task(self._wallet.delete_key, address)
 
+    async def export_private_key(self, address: Address) -> Mnemonic:
+        """
+        Exports the private key for the specified address in mnemonic form.
+        """
+        private_key = await schedule_blocking_io_task(self._wallet.export_key, address)
+        return Mnemonic.from_word_list(mnemonic.from_private_key(private_key))
+
+    async def sign_transaction(self, txn: Transaction) -> SignedTransaction:
+        """
+        Rekeyed accounts are handled accordingly. If the transaction sender account has been rekeyed, then the
+        authorized account will be used to sign the transaction.
+
+        :exception KeyNotFoundError: if the wallet does not contain the transaction signing account
+        """
+
+        signing_address = await get_auth_address(
+            Address(txn.sender), self._algod_client
+        )
+        if signing_address == txn.sender:
+            return self._wallet.sign_transaction(txn)
+
+        # the account has been rekeyed, and must instead be signed by the authorized account
+        # TODO: waiting on Algorand bug fix
+        # The below code should work and is the preferred method, but currently fails
+        # see - https://github.com/algorand/py-algorand-sdk/issues/436
+        try:
+            # TODO: remove this hacky work around when the issue is fixed
+            import base64
+
+            signing_address_bytes = base64.b32decode(
+                signing_address.encode("utf-8") + b"=" * 6
+            )
+            signing_address = Address(base64.b64encode(signing_address_bytes).decode())
+            #
+
+            self._wallet.automate_handle()
+            return await schedule_blocking_io_task(
+                self._wallet.kcl.sign_transaction,
+                self._wallet.handle,
+                self._wallet.pswd,
+                txn,
+                signing_address,
+            )
+        except KMDHTTPError as err:
+            if str(err).index("could not decode request body") != -1:
+                # the workaround for the above issue is to export the key and sign the transaction on the client side
+                return txn.sign(self._wallet.export_key(signing_address))
+            raise
+
 
 @dataclass(slots=True)
 class Wallet:
@@ -113,7 +167,10 @@ class KmdService:
     """
 
     def __init__(
-        self, url: str, token: str, password_validator: PasswordValidator | None = None
+        self,
+        url: str,
+        token: str,
+        password_validator: PasswordValidator | None = None,
     ):
         """
         :param url: KMD connection URL
@@ -205,7 +262,9 @@ class KmdService:
         )
         return Wallet._to_wallet(recovered_wallet)
 
-    async def connect(self, name: str, password: str) -> WalletSession:
+    async def connect(
+        self, name: str, password: str, algod_client: AlgodClient
+    ) -> WalletSession:
         """
         Connect to a wallet
 
@@ -220,4 +279,4 @@ class KmdService:
             password,
             self._kmd_client,
         )
-        return WalletSession(kmd_wallet)
+        return WalletSession(kmd_wallet, algod_client)
