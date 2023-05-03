@@ -15,7 +15,8 @@ from ulid import ULID
 
 from oysterpack.algorand.accounts import get_auth_address
 from oysterpack.algorand.keys import AlgoPrivateKey
-from oysterpack.algorand.kmd import KmdService
+from oysterpack.algorand.kmd import KmdService, WalletMultisigTransactionSigner
+from oysterpack.algorand.transactions import suggested_params_with_flat_flee
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
 from tests.test_support import fund_account
 
@@ -453,7 +454,9 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
         with self.subTest("import multisig"):
             multisig = Multisig(
-                version=1, threshold=2, addresses=[account_1, account_2]
+                version=1,
+                threshold=2,
+                addresses=[account_1, account_2],
             )
             await wallet_session.import_multisig(multisig)
             self.assertTrue(await wallet_session.contains_multisig(multisig.address()))
@@ -516,6 +519,37 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                         ],
                     )
                 )
+
+    async def test_sign_multisig_txn(self):
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
+        account_1 = await wallet_session.generate_account()
+        account_2 = await wallet_session.generate_account()
+        multisig = Multisig(
+            version=1,
+            threshold=2,
+            addresses=[account_1, account_2],
+        )
+        await wallet_session.import_multisig(multisig)
+        await fund_account(multisig.address())
+
+        account_3 = await wallet_session.generate_account()
+
+        txn = PaymentTxn(
+            sender=multisig.address(),
+            receiver=account_3,
+            amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
+            sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+        )
+        atc = AtomicTransactionComposer()
+        atc.add_transaction(
+            TransactionWithSigner(
+                txn=txn,
+                signer=WalletMultisigTransactionSigner(wallet_session, multisig),
+            )
+        )
+        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
 
 
 if __name__ == "__main__":

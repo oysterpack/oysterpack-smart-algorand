@@ -3,6 +3,7 @@ Provides support for KMD wallet-derived Algorand accounts
 
 https://developer.algorand.org/docs/get-details/accounts/create/#wallet-derived-kmd
 """
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Self
 
@@ -69,7 +70,11 @@ class WalletSession(TransactionSigner):
         :return:
         """
 
-        return [self._wallet.sign_transaction(txn_group[i]) for i in indexes]
+        def sign(txn: Transaction) -> SignedTransaction:
+            with asyncio.Runner() as runner:
+                return runner.run(self.sign_transaction(txn))
+
+        return [sign(txn_group[i]) for i in indexes]
 
     @property
     def wallet_name(self) -> str:
@@ -279,6 +284,95 @@ class WalletSession(TransactionSigner):
         if not await self.contains_multisig(address):
             return None
         return await schedule_blocking_io_task(self._wallet.export_multisig, address)
+
+    async def sign_multisig_transaction(
+        self,
+        txn: MultisigTransaction,
+        account: Address | None = None,
+    ) -> MultisigTransaction:
+        """
+        :param account: If None, then any multisig public keys contained by the wallet will sign the transaction.
+
+        Notes
+        -----
+        - Rekeyed accounts are not taken into consideration when signing multisig transaction. For example,
+          if a multisig contains an account that has been rekeyed, the account is still required to sign the
+          multisig txn, i.e., not the account that it has been rekeyed to.
+
+
+        :return: multisig txn with added signatures
+        """
+        multisig = await self.export_multisig(txn.multisig.address())
+        if multisig is None:
+            raise AssertionError("multsig does not exist in this wallet")
+
+        if account is not None:
+            if account not in multisig.get_public_keys():
+                raise AssertionError(
+                    f"multisig ({txn.multisig.address()}) does not contain account {account}"
+                )
+            if not await self.contains_account(account):
+                raise AssertionError("signing account does not exist in this wallet")
+            # workaround for https://github.com/algorand/py-algorand-sdk/issues/458
+            try:
+                return await schedule_blocking_io_task(
+                    self._wallet.sign_multisig_transaction, account, txn
+                )
+            except KMDHTTPError:
+                # check to see if the transaction sender has been rekeyed to the multsig
+                auth_addr = await get_auth_address(
+                    Address(txn.transaction.sender), self._algod_client
+                )
+                if auth_addr == multisig.address():
+                    private_key = await schedule_blocking_io_task(
+                        self._wallet.export_key, account
+                    )
+                    txn.sign(private_key)
+                    return txn
+                raise
+
+        # workaround for https://github.com/algorand/py-algorand-sdk/issues/458
+        try:
+            for account in multisig.get_public_keys():
+                if await self.contains_account(account):
+                    txn = self._wallet.sign_multisig_transaction(account, txn)
+        except KMDHTTPError:
+            # check to see if the transaction sender has been rekeyed to the multsig
+            auth_addr = await get_auth_address(
+                Address(txn.transaction.sender), self._algod_client
+            )
+            if auth_addr == multisig.address():
+                for account in multisig.get_public_keys():
+                    if await self.contains_account(Address(account)):
+                        private_key = await schedule_blocking_io_task(
+                            self._wallet.export_key, account
+                        )
+                        txn.sign(private_key)
+            else:
+                raise
+
+        return txn
+
+
+class WalletMultisigTransactionSigner(TransactionSigner):
+    def __init__(self, wallet_session: WalletSession, multisig: Multisig):
+        super().__init__()
+        self.__wallet_session = wallet_session
+        self.__multisig = multisig
+
+    def sign_transactions(
+        self,
+        txn_group: list[Transaction],
+        indexes: list[int],
+    ) -> list[SignedTransaction | LogicSigTransaction | MultisigTransaction]:
+        def sign(txn: Transaction) -> MultisigTransaction:
+            multisig_txn = MultisigTransaction(txn, self.__multisig)
+            with asyncio.Runner() as runner:
+                return runner.run(
+                    self.__wallet_session.sign_multisig_transaction(multisig_txn)
+                )
+
+        return [sign(txn_group[i]) for i in indexes]
 
 
 @dataclass(slots=True)
