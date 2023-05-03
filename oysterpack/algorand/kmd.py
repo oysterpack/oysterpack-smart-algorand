@@ -11,6 +11,7 @@ from algosdk.atomic_transaction_composer import TransactionSigner
 from algosdk.error import KMDHTTPError
 from algosdk.transaction import (
     LogicSigTransaction,
+    Multisig,
     MultisigTransaction,
     SignedTransaction,
     Transaction,
@@ -214,6 +215,70 @@ class WalletSession(TransactionSigner):
         - The account that it rekeyed to must exist in the same wallet
         """
         return await self.rekey(account, account)
+
+    async def import_multisig(self, multisig: Multisig) -> Address:
+        """
+        If the multisig does not exist in the wallet then import the multisig account into the wallet.
+
+        Asserts
+        -------
+        - multisig is valid
+        - at least one of the accounts must exist in this wallet.
+
+        Notes
+        -----
+        - The purpose of importing multisigs into the wallet is to be able to sign multisig transaction.
+          Thus, in order to be able to import a multisig, at least one of the accounts composing the multisig
+          must exist in the wallet.
+        """
+        multisig.validate()
+
+        if await self.contains_multisig(multisig.address()):
+            return multisig.address()
+
+        for address in multisig.get_public_keys():
+            if await self.contains_account(address):
+                return Address(
+                    await schedule_blocking_io_task(
+                        self._wallet.import_multisig, multisig
+                    )
+                )
+
+        raise AssertionError("at least one of the accounts must exist in this wallet")
+
+    async def contains_multisig(self, address: Address) -> bool:
+        """
+        :param address: multisig address
+        :return: True if the wallet contains the multisig
+        """
+        return address in await schedule_blocking_io_task(self._wallet.list_multisig)
+
+    async def delete_multisig(self, address: Address) -> bool:
+        """
+        :param address: multisig address
+        :return: True if the multisig was deleted
+        """
+        return await schedule_blocking_io_task(self._wallet.delete_multisig, address)
+
+    async def list_multisigs(self) -> dict[Address, Multisig]:
+        """
+        Returns list of multisig accounts that have been imported into this wallet.
+        """
+        return {
+            address: await schedule_blocking_io_task(
+                self._wallet.export_multisig, address
+            )
+            for address in await schedule_blocking_io_task(self._wallet.list_multisig)
+        }
+
+    async def export_multisig(self, address: Address) -> Multisig | None:
+        """
+        :param address: multisig address
+        :return: None if this wallet does not contain the multisig
+        """
+        if not await self.contains_multisig(address):
+            return None
+        return await schedule_blocking_io_task(self._wallet.export_multisig, address)
 
 
 @dataclass(slots=True)

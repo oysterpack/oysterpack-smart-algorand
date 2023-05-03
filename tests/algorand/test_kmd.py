@@ -6,8 +6,8 @@ from algosdk.atomic_transaction_composer import (
     AtomicTransactionComposer,
     TransactionWithSigner,
 )
-from algosdk.error import KMDHTTPError
-from algosdk.transaction import PaymentTxn, wait_for_confirmation
+from algosdk.error import InvalidThresholdError, KMDHTTPError
+from algosdk.transaction import Multisig, PaymentTxn, wait_for_confirmation
 from algosdk.util import algos_to_microalgos
 from beaker import sandbox
 from password_validator import PasswordValidator
@@ -441,6 +441,81 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             sender, await get_auth_address(sender, sandbox.get_algod_client())
         )
+
+    async def test_multisig(self):
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
+        account_1 = await wallet_session.generate_account()
+        account_2 = await wallet_session.generate_account()
+
+        self.assertEqual(0, len(await wallet_session.list_multisigs()))
+
+        with self.subTest("import multisig"):
+            multisig = Multisig(
+                version=1, threshold=2, addresses=[account_1, account_2]
+            )
+            await wallet_session.import_multisig(multisig)
+            self.assertTrue(await wallet_session.contains_multisig(multisig.address()))
+            multisigs = await wallet_session.list_multisigs()
+            self.assertEqual(1, len(multisigs))
+            self.assertEqual(multisig, multisigs[multisig.address()])
+            self.assertEqual(
+                multisig, await wallet_session.export_multisig(multisig.address())
+            )
+
+        with self.subTest("import multisig that already exists in the wallet"):
+            await wallet_session.import_multisig(multisig)
+            multisigs = await wallet_session.list_multisigs()
+            self.assertEqual(1, len(multisigs))
+
+        with self.subTest("delete multisig"):
+            await wallet_session.delete_multisig(multisig.address())
+            self.assertFalse(await wallet_session.contains_multisig(multisig.address()))
+            self.assertIsNone(await wallet_session.export_multisig(multisig.address()))
+
+        with self.subTest("delete multisig that does not exist in the wallet"):
+            await wallet_session.delete_multisig(multisig.address())
+
+        with self.subTest("import multisig that has no accounts in the wallet"):
+            account_3 = AlgoPrivateKey()
+            account_4 = AlgoPrivateKey()
+            with self.assertRaises(AssertionError):
+                await wallet_session.import_multisig(
+                    Multisig(
+                        version=1,
+                        threshold=2,
+                        addresses=[
+                            account_3.signing_address,
+                            account_4.signing_address,
+                        ],
+                    )
+                )
+
+        with self.subTest("import multisig with only 1 account in this wallet"):
+            multisig = Multisig(
+                version=1,
+                threshold=2,
+                addresses=[
+                    account_1,
+                    account_4.signing_address,
+                ],
+            )
+            await wallet_session.import_multisig(multisig)
+            self.assertTrue(await wallet_session.contains_multisig(multisig.address()))
+
+        with self.subTest("import invalid multisig"):
+            with self.assertRaises(InvalidThresholdError):
+                await wallet_session.import_multisig(
+                    Multisig(
+                        version=1,
+                        threshold=3,
+                        addresses=[
+                            account_1,
+                            account_2,
+                        ],
+                    )
+                )
 
 
 if __name__ == "__main__":
