@@ -5,7 +5,7 @@ https://developer.algorand.org/docs/get-details/accounts/create/#wallet-derived-
 """
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, Self, cast
 
 from algosdk import kmd, mnemonic
 from algosdk.atomic_transaction_composer import TransactionSigner
@@ -70,7 +70,7 @@ class WalletSession(TransactionSigner):
         :return:
         """
 
-        def sign(txn: Transaction) -> SignedTransaction:
+        def sign(txn: Transaction) -> SignedTransaction | MultisigTransaction:
             with asyncio.Runner() as runner:
                 return runner.run(self.sign_transaction(txn))
 
@@ -139,7 +139,9 @@ class WalletSession(TransactionSigner):
         private_key = await schedule_blocking_io_task(self._wallet.export_key, address)
         return Mnemonic.from_word_list(mnemonic.from_private_key(private_key))
 
-    async def sign_transaction(self, txn: Transaction) -> SignedTransaction:
+    async def sign_transaction(
+        self, txn: Transaction
+    ) -> SignedTransaction | MultisigTransaction:
         """
         Rekeyed accounts are handled accordingly. If the transaction sender account has been rekeyed, then the
         authorized account will be used to sign the transaction.
@@ -151,6 +153,13 @@ class WalletSession(TransactionSigner):
             Address(txn.sender),
             self._algod_client,
         )
+
+        if await self.contains_multisig(signing_address):
+            multisig = await self.export_multisig(signing_address)
+            return await self.sign_multisig_transaction(
+                MultisigTransaction(txn, cast(Multisig, multisig))
+            )
+
         if signing_address == txn.sender:
             return await schedule_blocking_io_task(self._wallet.sign_transaction, txn)
 
@@ -308,9 +317,7 @@ class WalletSession(TransactionSigner):
 
         if account is not None:
             if account not in multisig.get_public_keys():
-                raise AssertionError(
-                    f"multisig ({txn.multisig.address()}) does not contain account {account}"
-                )
+                raise AssertionError("multisig does not contain the specified account")
             if not await self.contains_account(account):
                 raise AssertionError("signing account does not exist in this wallet")
             # workaround for https://github.com/algorand/py-algorand-sdk/issues/458
@@ -319,7 +326,7 @@ class WalletSession(TransactionSigner):
                     self._wallet.sign_multisig_transaction, account, txn
                 )
             except KMDHTTPError:
-                # check to see if the transaction sender has been rekeyed to the multsig
+                # check to see if the transaction sender has been rekeyed to the multisig
                 auth_addr = await get_auth_address(
                     Address(txn.transaction.sender), self._algod_client
                 )
@@ -337,7 +344,7 @@ class WalletSession(TransactionSigner):
                 if await self.contains_account(account):
                     txn = self._wallet.sign_multisig_transaction(account, txn)
         except KMDHTTPError:
-            # check to see if the transaction sender has been rekeyed to the multsig
+            # check to see if the transaction sender has been rekeyed to the multisig
             auth_addr = await get_auth_address(
                 Address(txn.transaction.sender), self._algod_client
             )
@@ -352,27 +359,6 @@ class WalletSession(TransactionSigner):
                 raise
 
         return txn
-
-
-class WalletMultisigTransactionSigner(TransactionSigner):
-    def __init__(self, wallet_session: WalletSession, multisig: Multisig):
-        super().__init__()
-        self.__wallet_session = wallet_session
-        self.__multisig = multisig
-
-    def sign_transactions(
-        self,
-        txn_group: list[Transaction],
-        indexes: list[int],
-    ) -> list[SignedTransaction | LogicSigTransaction | MultisigTransaction]:
-        def sign(txn: Transaction) -> MultisigTransaction:
-            multisig_txn = MultisigTransaction(txn, self.__multisig)
-            with asyncio.Runner() as runner:
-                return runner.run(
-                    self.__wallet_session.sign_multisig_transaction(multisig_txn)
-                )
-
-        return [sign(txn_group[i]) for i in indexes]
 
 
 @dataclass(slots=True)

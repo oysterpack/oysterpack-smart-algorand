@@ -7,7 +7,12 @@ from algosdk.atomic_transaction_composer import (
     TransactionWithSigner,
 )
 from algosdk.error import InvalidThresholdError, KMDHTTPError
-from algosdk.transaction import Multisig, PaymentTxn, wait_for_confirmation
+from algosdk.transaction import (
+    Multisig,
+    MultisigTransaction,
+    PaymentTxn,
+    wait_for_confirmation,
+)
 from algosdk.util import algos_to_microalgos
 from beaker import sandbox
 from password_validator import PasswordValidator
@@ -15,8 +20,11 @@ from ulid import ULID
 
 from oysterpack.algorand.accounts import get_auth_address
 from oysterpack.algorand.keys import AlgoPrivateKey
-from oysterpack.algorand.kmd import KmdService, WalletMultisigTransactionSigner
-from oysterpack.algorand.transactions import suggested_params_with_flat_flee
+from oysterpack.algorand.kmd import KmdService
+from oysterpack.algorand.transactions import (
+    create_rekey_txn,
+    suggested_params_with_flat_flee,
+)
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
 from tests.test_support import fund_account
 
@@ -546,10 +554,136 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
         atc.add_transaction(
             TransactionWithSigner(
                 txn=txn,
-                signer=WalletMultisigTransactionSigner(wallet_session, multisig),
+                signer=wallet_session,
             )
         )
         await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+
+        with self.subTest("multisig is not in the wallet"):
+            await wallet_session.delete_multisig(multisig.address())
+            with self.assertRaises(AssertionError) as err:
+                await wallet_session.sign_multisig_transaction(
+                    MultisigTransaction(txn, multisig)
+                )
+            self.assertEqual(
+                "multsig does not exist in this wallet", str(err.exception)
+            )
+
+        with self.subTest("sign using specified account"):
+            await wallet_session.import_multisig(multisig)
+            txn = PaymentTxn(
+                sender=multisig.address(),
+                receiver=account_3,
+                amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
+                sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+            )
+            signed_multisig_txn = await wallet_session.sign_multisig_transaction(
+                txn=MultisigTransaction(txn, multisig),
+                account=account_1,
+            )
+            signed_multisig_txn = await wallet_session.sign_multisig_transaction(
+                txn=signed_multisig_txn,
+                account=account_2,
+            )
+            txid = await schedule_blocking_io_task(
+                sandbox.get_algod_client().send_transaction, signed_multisig_txn
+            )
+            await schedule_blocking_io_task(
+                wait_for_confirmation, sandbox.get_algod_client(), txid
+            )
+
+        with self.subTest("sign using account that is not part of multisig"):
+            with self.assertRaises(AssertionError) as err:
+                await wallet_session.sign_multisig_transaction(
+                    txn=MultisigTransaction(txn, multisig),
+                    account=AlgoPrivateKey().signing_address,
+                )
+            self.assertEqual(
+                "multisig does not contain the specified account", str(err.exception)
+            )
+
+        with self.subTest("wallet does not contain the specified account"):
+            await wallet_session.delete_account(account_1)
+            with self.assertRaises(AssertionError) as err:
+                await wallet_session.sign_multisig_transaction(
+                    txn=MultisigTransaction(txn, multisig),
+                    account=account_1,
+                )
+            self.assertEqual(
+                "signing account does not exist in this wallet", str(err.exception)
+            )
+
+    async def test_sign_multisig_txn_using_rekeyed(self):
+        wallet_session = await self.kmd_service.connect(
+            self.name, self.password, sandbox.get_algod_client()
+        )
+        main_account = await wallet_session.generate_account()
+        account_1 = await wallet_session.generate_account()
+        account_2 = await wallet_session.generate_account()
+        multisig = Multisig(
+            version=1,
+            threshold=2,
+            addresses=[account_1, account_2],
+        )
+        await wallet_session.import_multisig(multisig)
+        await fund_account(main_account)
+
+        # rekey the main account to the multisig
+        rekey_txn = create_rekey_txn(
+            account=main_account,
+            rekey_to=multisig.address(),
+            suggested_params=await suggested_params_with_flat_flee(
+                sandbox.get_algod_client()
+            ),
+        )
+        atc = AtomicTransactionComposer()
+        atc.add_transaction(
+            TransactionWithSigner(
+                txn=rekey_txn,
+                signer=wallet_session,
+            )
+        )
+        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+
+        # send a payment from the main_account to account_3
+        # the transaction is signed by the multisig
+        account_3 = await wallet_session.generate_account()
+        txn = PaymentTxn(
+            sender=main_account,
+            receiver=account_3,
+            amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
+            sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+        )
+        atc = AtomicTransactionComposer()
+        atc.add_transaction(
+            TransactionWithSigner(
+                txn=txn,
+                signer=wallet_session,
+            )
+        )
+        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+
+        with self.subTest("using specified accounts"):
+            txn = PaymentTxn(
+                sender=main_account,
+                receiver=account_3,
+                amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
+                sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+            )
+            multisig_txn = await wallet_session.sign_multisig_transaction(
+                MultisigTransaction(txn, multisig),
+                account_1,
+            )
+            multisig_txn = await wallet_session.sign_multisig_transaction(
+                multisig_txn,
+                account_2,
+            )
+            txid = await schedule_blocking_io_task(
+                sandbox.get_algod_client().send_transaction, multisig_txn
+            )
+            await schedule_blocking_io_task(
+                wait_for_confirmation, sandbox.get_algod_client(), txid
+            )
 
 
 if __name__ == "__main__":
