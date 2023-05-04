@@ -23,6 +23,7 @@ from oysterpack.algorand.keys import AlgoPrivateKey
 from oysterpack.algorand.kmd import KmdService
 from oysterpack.algorand.transactions import (
     create_rekey_txn,
+    send_transaction,
     suggested_params_with_flat_flee,
 )
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
@@ -585,12 +586,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 txn=signed_multisig_txn,
                 account=account_2,
             )
-            txid = await schedule_blocking_io_task(
-                sandbox.get_algod_client().send_transaction, signed_multisig_txn
-            )
-            await schedule_blocking_io_task(
-                wait_for_confirmation, sandbox.get_algod_client(), txid
-            )
+            await send_transaction(sandbox.get_algod_client(), signed_multisig_txn)
 
         with self.subTest("sign using account that is not part of multisig"):
             with self.assertRaises(AssertionError) as err:
@@ -678,12 +674,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 multisig_txn,
                 account_2,
             )
-            txid = await schedule_blocking_io_task(
-                sandbox.get_algod_client().send_transaction, multisig_txn
-            )
-            await schedule_blocking_io_task(
-                wait_for_confirmation, sandbox.get_algod_client(), txid
-            )
+            await send_transaction(sandbox.get_algod_client(), multisig_txn)
 
 
 if __name__ == "__main__":
