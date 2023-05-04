@@ -14,7 +14,7 @@ from algosdk import constants, mnemonic, transaction
 from algosdk.account import generate_account
 from algosdk.atomic_transaction_composer import TransactionSigner
 from algosdk.encoding import decode_address, encode_address
-from algosdk.transaction import GenericSignedTransaction
+from algosdk.transaction import GenericSignedTransaction, Transaction
 from nacl.exceptions import BadSignatureError
 from nacl.public import Box, PrivateKey, PublicKey
 from nacl.signing import SignedMessage, SigningKey, VerifyKey
@@ -207,12 +207,9 @@ class AlgoPrivateKey(PrivateKey, TransactionSigner):
         txn_group: list[transaction.Transaction],
         indexes: list[int],
     ) -> list[GenericSignedTransaction]:
-        stxns = []
-        for i in indexes:
-            stxn = txn_group[i].sign(
-                base64.b64encode(
-                    bytes(self) + bytes(self.signing_key.verify_key)
-                ).decode()
-            )
-            stxns.append(stxn)
-        return stxns
+        return [self.sign_transaction(txn_group[i]) for i in indexes]
+
+    def sign_transaction(self, txn: Transaction) -> GenericSignedTransaction:
+        return txn.sign(
+            base64.b64encode(bytes(self) + bytes(self.signing_key.verify_key)).decode()
+        )

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from algosdk.transaction import PaymentTxn, wait_for_confirmation
+from algosdk.transaction import PaymentTxn
 from algosdk.util import algos_to_microalgos
 from algosdk.wallet import Wallet
 from beaker import sandbox
@@ -10,6 +10,7 @@ from ulid import ULID
 from oysterpack.algorand import Address, MicroAlgos
 from oysterpack.algorand.accounts import get_algo_balance
 from oysterpack.algorand.kmd import KmdService, WalletSession
+from oysterpack.algorand.transactions import send_transaction
 from oysterpack.core.asyncio.task_manager import schedule_blocking_io_task
 
 
@@ -73,7 +74,7 @@ async def fund_account(account: Address, amt: MicroAlgos | None = None):
     )
 
     signed_txn = await schedule_blocking_io_task(
-        (await sandbox_default_wallet()).sign_transaction, txn
+        (await sandbox_default_wallet()).sign_transaction,
+        txn,
     )
-    txid = await schedule_blocking_io_task(algod_client.send_transaction, signed_txn)
-    await schedule_blocking_io_task(wait_for_confirmation, algod_client, txid)
+    await send_transaction(algod_client, signed_txn)

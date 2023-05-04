@@ -24,6 +24,8 @@ async def suggested_params_with_flat_flee(
 
     :param txn_count: specifies how many transactions to pay for
     """
+    if txn_count < 1:
+        raise ValueError("txn_count must be >= 1")
     suggested_params = await schedule_blocking_io_task(algod_client.suggested_params)
     suggested_params.fee = suggested_params.min_fee * txn_count
     suggested_params.flat_fee = True
