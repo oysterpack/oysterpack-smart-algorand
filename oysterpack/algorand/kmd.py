@@ -50,13 +50,10 @@ class WalletSession(TransactionSigner):
         """
 
         if self._wallet.handle:
-            try:
-                schedule(
-                    "WalletSession/del",
-                    schedule_blocking_io_task(self._wallet.release_handle),
-                )
-            except Exception:
-                ...
+            schedule(
+                "WalletSession/del",
+                schedule_blocking_io_task(self._wallet.release_handle),
+            )
 
     def sign_transactions(
         self,
