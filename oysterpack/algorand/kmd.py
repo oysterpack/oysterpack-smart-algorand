@@ -320,43 +320,13 @@ class WalletSession(TransactionSigner):
                 raise AssertionError("multisig does not contain the specified account")
             if not await self.contains_account(account):
                 raise AssertionError("signing account does not exist in this wallet")
-            # workaround for https://github.com/algorand/py-algorand-sdk/issues/458
-            try:
-                return await schedule_blocking_io_task(
-                    self._wallet.sign_multisig_transaction, account, txn
-                )
-            except KMDHTTPError:
-                # check to see if the transaction sender has been rekeyed to the multisig
-                auth_addr = await get_auth_address(
-                    Address(txn.transaction.sender), self._algod_client
-                )
-                if auth_addr == multisig.address():
-                    private_key = await schedule_blocking_io_task(
-                        self._wallet.export_key, account
-                    )
-                    txn.sign(private_key)
-                    return txn
-                raise
-
-        # workaround for https://github.com/algorand/py-algorand-sdk/issues/458
-        try:
-            for account in multisig.get_public_keys():
-                if await self.contains_account(account):
-                    txn = self._wallet.sign_multisig_transaction(account, txn)
-        except KMDHTTPError:
-            # check to see if the transaction sender has been rekeyed to the multisig
-            auth_addr = await get_auth_address(
-                Address(txn.transaction.sender), self._algod_client
+            return await schedule_blocking_io_task(
+                self._wallet.sign_multisig_transaction, account, txn
             )
-            if auth_addr == multisig.address():
-                for account in multisig.get_public_keys():
-                    if await self.contains_account(Address(account)):
-                        private_key = await schedule_blocking_io_task(
-                            self._wallet.export_key, account
-                        )
-                        txn.sign(private_key)
-            else:
-                raise
+
+        for account in multisig.get_public_keys():
+            if await self.contains_account(account):
+                txn = self._wallet.sign_multisig_transaction(account, txn)
 
         return txn
 
