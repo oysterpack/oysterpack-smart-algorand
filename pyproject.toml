@@ -50,3 +50,6 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 allow_untyped_defs = false
 strict_equality = true
+
+[tool.poetry.scripts]
+algo = 'oysterpack.apps.algo.cli:cli'

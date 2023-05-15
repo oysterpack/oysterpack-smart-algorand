@@ -5,11 +5,6 @@ import unittest
 from oysterpack.core.ulid import HashableULID
 
 
-class MyTestCase(unittest.TestCase):
-    def test_something(self) -> None:
-        self.assertEqual(True, True)  # add assertion here
-
-
 class Foo:
     async def __call__(self) -> int:
         await asyncio.sleep(0)
@@ -18,6 +13,15 @@ class Foo:
     @staticmethod
     def task_name() -> str:
         return Foo.__qualname__
+
+
+class MyTestCase(unittest.TestCase):
+    def test_something(self):
+        self.assertEqual(True, True)  # add assertion here
+
+    def test_run_async_func(self):
+        result = asyncio.run(Foo()())
+        self.assertTrue(1 <= result <= 100)
 
 
 class MyAsyncTestCase(unittest.IsolatedAsyncioTestCase):
@@ -31,9 +35,7 @@ class MyAsyncTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_task_name_callable(self) -> None:
         foo = Foo()
-        task = asyncio.create_task(
-            foo(), name=f"{Foo.task_name()}/{str(HashableULID())}"
-        )
+        task = asyncio.create_task(foo(), name=f"{Foo.task_name()}/{HashableULID()!s}")
         print(task.get_name())
 
 

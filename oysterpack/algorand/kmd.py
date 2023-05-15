@@ -16,17 +16,15 @@ from algosdk.transaction import (
     MultisigTransaction,
     SignedTransaction,
     Transaction,
-    wait_for_confirmation,
 )
 from algosdk.v2client.algod import AlgodClient
 from algosdk.wallet import Wallet as KMDWallet
 from password_validator import PasswordValidator
 
 from oysterpack.algorand import Address, Mnemonic, TxnId
-from oysterpack.algorand.accounts import get_auth_address
+from oysterpack.algorand.algod import AsyncAlgodClient
 from oysterpack.algorand.transactions import (
     create_rekey_txn,
-    suggested_params_with_flat_flee,
 )
 from oysterpack.core.asyncio.task_manager import schedule, schedule_blocking_io_task
 
@@ -39,7 +37,7 @@ class WalletSession(TransactionSigner):
     def __init__(self, wallet: KMDWallet, algod_client: AlgodClient):
         super().__init__()
         self._wallet = wallet
-        self._algod_client = algod_client
+        self._algod_client = AsyncAlgodClient(algod_client)
 
     def __del__(self):
         """
@@ -146,10 +144,7 @@ class WalletSession(TransactionSigner):
         :exception KeyNotFoundError: if the wallet does not contain the transaction signing account
         """
 
-        signing_address = await get_auth_address(
-            Address(txn.sender),
-            self._algod_client,
-        )
+        signing_address = await self._algod_client.get_auth_address(Address(txn.sender))
 
         if await self.contains_multisig(signing_address):
             multisig = await self.export_multisig(signing_address)
@@ -208,14 +203,12 @@ class WalletSession(TransactionSigner):
         txn = create_rekey_txn(
             account=account,
             rekey_to=to,
-            suggested_params=await suggested_params_with_flat_flee(self._algod_client),
+            suggested_params=await self._algod_client.suggested_params_with_flat_flee(),
         )
         signed_txn = await self.sign_transaction(txn)
-        txid = await schedule_blocking_io_task(
-            self._algod_client.send_transaction, signed_txn
-        )
-        await schedule_blocking_io_task(wait_for_confirmation, self._algod_client, txid)
-        return TxnId(txid)
+        txid = await self._algod_client.send_transaction(signed_txn)
+        await self._algod_client.wait_for_confirmation(txid)
+        return txid
 
     async def rekey_back(self, account: Address) -> TxnId:
         """

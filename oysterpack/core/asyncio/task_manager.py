@@ -63,7 +63,7 @@ def schedule(task_uri: TaskURI, coroutine: Coroutine) -> Task:
     :param coroutine: Coroutine
     :return: Task
     """
-    task = asyncio.create_task(coroutine, name=f"{task_uri}/{str(ULID())}")
+    task = asyncio.create_task(coroutine, name=f"{task_uri}/{ULID()!s}")
     __logger.debug("schedule(%s)", task.get_name())
     if task_uri in __tasks:
         __tasks[task_uri].add(task)
