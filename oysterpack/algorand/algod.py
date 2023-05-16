@@ -1,6 +1,7 @@
 """
 AsyncAlgodClient wraps an AlgodClient to enable
 """
+from typing import Any, cast
 
 from algosdk.transaction import (
     GenericSignedTransaction,
@@ -39,3 +40,22 @@ class AsyncAlgodClient:
         await schedule_blocking_io_task(
             wait_for_confirmation, self.__client, txid, wait_rounds
         )
+
+    async def check_node_status(self):
+        """
+        Asserts that the algod node is caught up.
+
+        :raises AssertionError: if failed to connect to algod node
+        :raises AssertionError: if algod node is not caught up
+        """
+        try:
+            result = cast(
+                dict[str, Any], await schedule_blocking_io_task(self.__client.status)
+            )
+        except Exception as err:
+            raise AssertionError("Failed to connect to Algorand node") from err
+
+        if catchup_time := result["catchup-time"] > 0:
+            raise AssertionError(
+                f"Algorand node is not caught up: catchup_time={catchup_time}"
+            )

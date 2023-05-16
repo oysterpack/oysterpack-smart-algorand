@@ -2,11 +2,14 @@
 Algorand CLI
 """
 from dataclasses import dataclass
-from typing import Any, cast
+from pathlib import Path
+from typing import Self
 
+import tomllib
 from algosdk.v2client.algod import AlgodClient
 
-from oysterpack.algorand.kmd import KmdService
+from oysterpack.algorand.algod import AsyncAlgodClient
+from oysterpack.algorand.kmd import KmdService, Wallet
 
 
 @dataclass(slots=True)
@@ -14,28 +17,13 @@ class AlgodConfig:
     url: str
     token: str
 
-    def create_client(self) -> AlgodClient:
-        """
-        Creates a new AlgodClient
-
-        :raises AssertionError: if failed to connect to the algod node or if the node is not caught up
-        """
-        client = AlgodClient(
-            algod_token=self.token,
-            algod_address=self.url,
-        )
-
-        try:
-            result = cast(dict[str, Any], client.status())
-        except Exception as err:
-            raise AssertionError("Failed to connect to Algorand node") from err
-
-        if catchup_time := result["catchup-time"] > 0:
-            raise AssertionError(
-                f"Algorand node is not caught up: catchup_time={catchup_time}"
+    def create_client(self) -> AsyncAlgodClient:
+        return AsyncAlgodClient(
+            AlgodClient(
+                algod_token=self.token,
+                algod_address=self.url,
             )
-
-        return client
+        )
 
 
 @dataclass(slots=True)
@@ -44,9 +32,6 @@ class KmdConfig:
     token: str
 
     def create_client(self) -> KmdService:
-        """
-        Creates a new KmdService
-        """
         return KmdService(url=self.url, token=self.token)
 
 
@@ -55,12 +40,49 @@ class AppConfig:
     algod_config: AlgodConfig
     kmd_config: KmdConfig
 
+    @classmethod
+    def from_config_file(cls, toml_file: Path) -> Self:
+        with open(toml_file, "rb") as config_file:
+            config = tomllib.load(config_file)
+
+        algod_config = AlgodConfig(
+            token=config["algod"]["token"],
+            url=config["algod"]["url"],
+        )
+
+        kmd_config = KmdConfig(
+            token=config["kmd"]["token"],
+            url=config["kmd"]["url"],
+        )
+
+        return cls(
+            algod_config=algod_config,
+            kmd_config=kmd_config,
+        )
+
 
 @dataclass(slots=True)
 class App:
     kmd: KmdService
-    algod: AlgodClient
+    algod: AsyncAlgodClient
 
     def __init__(self, config: AppConfig):
         self.kmd = config.kmd_config.create_client()
         self.algod = config.algod_config.create_client()
+
+    async def check_connections(self):
+        """
+        Checks the KMD and algod node connections.
+
+        :raises AssertionErrror: if fails to get wallet listing from KMD server
+        :raises AssertionError: if the algod node is not caught up
+        """
+        try:
+            await self.kmd.list_wallets()
+        except Exception as err:
+            raise AssertionError("Failed to connect to KMD node") from err
+
+        await self.algod.check_node_status()
+
+    async def list_wallets(self) -> list[Wallet]:
+        return await self.kmd.list_wallets()
