@@ -6,6 +6,7 @@ from click import BaseCommand
 from click.testing import CliRunner
 from ulid import ULID
 
+from oysterpack.algorand import Mnemonic
 from oysterpack.apps.algo.cli import cli
 
 localnet_config = f"""
@@ -54,8 +55,8 @@ class CliTestCase(unittest.TestCase):
         wallet_created_success_message: Final[str] = "Wallet was successfully created"
 
         kmd = localnet.kmd.get_client()
-
         runner = CliRunner()
+
         with self.subTest("create wallet"):
             with runner.isolated_filesystem():
                 with open(ALGO_CONFIG_FILE, "wb") as f:
@@ -192,6 +193,91 @@ class CliTestCase(unittest.TestCase):
                 lines = result.output.split("\n")
                 self.assertEqual(
                     "Error: password cannot be blank", lines[len(lines) - 2]
+                )
+
+    def test_master_derivation_key(self):
+        localnet.kmd.get_client()
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            with open(ALGO_CONFIG_FILE, "wb") as f:
+                f.write(localnet_config)
+
+            with self.subTest("export from existing wallet"):
+                wallet_name_not_exists = str(ULID())
+                wallet_name = str(ULID())
+                wallet_password = str(ULID())
+
+                result = runner.invoke(
+                    cast(BaseCommand, cli),
+                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "create-wallet"],
+                    input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\n",
+                )
+                self.assertEqual(0, result.exit_code)
+
+                result = runner.invoke(
+                    cast(BaseCommand, cli),
+                    [
+                        "kmd",
+                        "--config-file",
+                        ALGO_CONFIG_FILE,
+                        "export-wallet-master-derivation-key",
+                    ],
+                    input=f"{wallet_name_not_exists}\n{wallet_name}\n{wallet_password}\n",
+                )
+                self.assertEqual(0, result.exit_code)
+                print(result.output)
+                output_lines = result.output.split("\n")
+                self.assertEqual("Error: wallet does not exist", output_lines[1])
+                mdk = Mnemonic.from_word_list(output_lines[len(output_lines) - 2])
+
+            with self.subTest("recover wallet"):
+                wallet_name = str(ULID())
+                wallet_password = str(ULID())
+
+                result = runner.invoke(
+                    cast(BaseCommand, cli),
+                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "recover-wallet"],
+                    input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\n{mdk}",
+                )
+                self.assertEqual(0, result.exit_code)
+                output_lines = result.output.split("\n")
+                self.assertEqual(
+                    "Wallet was successfully recovered",
+                    output_lines[len(output_lines) - 2],
+                )
+
+                # export the wallet MDK to ensure it matches the MDK that was used to recover it
+                result = runner.invoke(
+                    cast(BaseCommand, cli),
+                    [
+                        "kmd",
+                        "--config-file",
+                        ALGO_CONFIG_FILE,
+                        "export-wallet-master-derivation-key",
+                    ],
+                    input=f"{wallet_name}\n{wallet_password}\n",
+                )
+                self.assertEqual(0, result.exit_code)
+                output_lines = result.output.split("\n")
+                mdk_2 = Mnemonic.from_word_list(output_lines[len(output_lines) - 2])
+                self.assertEqual(mdk, mdk_2)
+
+            with self.subTest("recover wallet using invalid MDK"):
+                wallet_name = str(ULID())
+                wallet_password = str(ULID())
+
+                result = runner.invoke(
+                    cast(BaseCommand, cli),
+                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "recover-wallet"],
+                    input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\ninvalid mdk",
+                )
+                self.assertNotEqual(0, result.exit_code)
+                print(result.output)
+                output_lines = result.output.split("\n")
+                self.assertEqual(
+                    "Error: invalid master derivation key - mnemonic must consist of 25 words",
+                    output_lines[len(output_lines) - 2],
                 )
 
 

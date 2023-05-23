@@ -2,11 +2,13 @@
 Algorand CLI
 """
 import asyncio
+from enum import IntEnum
 from pathlib import Path
 from typing import cast
 
 import click
 
+from oysterpack.algorand import Mnemonic
 from oysterpack.apps.algo.app import App, AppConfig
 
 
@@ -45,44 +47,72 @@ def list_wallets(ctx: click.Context):
         click.echo(wallet)
 
 
+async def wallet_exists(app: App, name: str) -> bool:
+    wallet = await app.kmd.get_wallet(name)
+    return wallet is not None
+
+
+class GetNameMode(IntEnum):
+    MustNotExist = 1
+    MustExist = 2
+
+
+async def get_name(app: App, *, mode: GetNameMode = GetNameMode.MustNotExist) -> str:
+    while len(name := cast(str, click.prompt("Wallet Name", type=str)).strip()) == 0:
+        click.echo("Error: wallet name cannot be blank")
+
+    match mode:
+        case GetNameMode.MustNotExist:
+            if await wallet_exists(app, name):
+                click.echo("Error: wallet with the same name already exists")
+                return await get_name(app, mode=mode)
+        case GetNameMode.MustExist:
+            if not await wallet_exists(app, name):
+                click.echo("Error: wallet does not exist")
+                return await get_name(app, mode=mode)
+
+    return name
+
+
+def get_password(*, confirm_password: bool = True) -> str:
+    return cast(
+        str,
+        click.prompt(
+            "Wallet Password",
+            value_proc=str.strip,
+            hide_input=True,
+            confirmation_prompt=confirm_password,
+        ),
+    )
+
+
 @kmd.command()
 @click.pass_context
 def create_wallet(ctx: click.Context):
     app = cast(App, ctx.obj)
 
-    async def wallet_exists(name: str) -> bool:
-        wallet = await app.kmd.get_wallet(name)
-        return wallet is not None
-
-    async def get_name() -> str:
-        while (
-            len(name := cast(str, click.prompt("Wallet Name", type=str)).strip()) == 0
-        ):
-            click.echo("Error: wallet name cannot be blank")
-
-        if await wallet_exists(name):
-            click.echo("Error: wallet with the same name already exists")
-            return await get_name()
-
-        return name
-
-    def get_password() -> str:
-        return cast(
-            str,
-            click.prompt(
-                "Wallet Password",
-                value_proc=str.strip,
-                hide_input=True,
-                confirmation_prompt=True,
-            ),
-        )
-
     with asyncio.Runner() as runner:
-        name = runner.run(get_name())
+        name = runner.run(get_name(app))
         password = get_password()
         try:
             runner.run(app.kmd.create_wallet(name, password))
             click.echo("Wallet was successfully created")
+        except Exception as err:
+            ctx.fail(str(err))
+
+
+@kmd.command()
+@click.pass_context
+def export_wallet_master_derivation_key(ctx: click.Context):
+    app = cast(App, ctx.obj)
+
+    with asyncio.Runner() as runner:
+        name = runner.run(get_name(app, mode=GetNameMode.MustExist))
+        password = get_password(confirm_password=False)
+        try:
+            wallet_session = runner.run(app.kmd.connect(name, password, app.algod))
+            mdk = runner.run(wallet_session.export_master_derivation_key())
+            click.echo(mdk)
         except Exception as err:
             ctx.fail(str(err))
 
@@ -95,6 +125,31 @@ def recover_wallet(ctx: click.Context):
 
     The recovered wallet will be empty. Keys will need to be regenerated.
     """
+    app = cast(App, ctx.obj)
+
+    def get_master_derivation_key() -> Mnemonic:
+        mdk = cast(
+            str,
+            click.prompt(
+                "Master Derivation Key (Mnemonic)",
+                value_proc=str.strip,
+                hide_input=True,
+            ),
+        )
+        try:
+            return Mnemonic.from_word_list(mdk)
+        except Exception as err:
+            ctx.fail(f"invalid master derivation key - {err}")
+
+    with asyncio.Runner() as runner:
+        name = runner.run(get_name(app))
+        password = get_password()
+        mdk = get_master_derivation_key()
+        try:
+            runner.run(app.kmd.recover_wallet(name, password, mdk))
+            click.echo("Wallet was successfully recovered")
+        except Exception as err:
+            ctx.fail(str(err))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ Provides support for KMD wallet-derived Algorand accounts
 https://developer.algorand.org/docs/get-details/accounts/create/#wallet-derived-kmd
 """
 import asyncio
+from asyncio import get_running_loop
 from dataclasses import dataclass
 from typing import Any, Self, cast
 
@@ -34,10 +35,13 @@ class WalletSession(TransactionSigner):
     Represents an open wallet connection
     """
 
-    def __init__(self, wallet: KMDWallet, algod_client: AlgodClient):
+    def __init__(self, wallet: KMDWallet, algod_client: AlgodClient | AsyncAlgodClient):
         super().__init__()
         self._wallet = wallet
-        self._algod_client = AsyncAlgodClient(algod_client)
+        if isinstance(algod_client, AlgodClient):
+            self._algod_client = AsyncAlgodClient(algod_client)
+        else:
+            self._algod_client = algod_client
 
     def __del__(self):
         """
@@ -48,10 +52,15 @@ class WalletSession(TransactionSigner):
         """
 
         if self._wallet.handle:
-            schedule(
-                "WalletSession/del",
-                schedule_blocking_io_task(self._wallet.release_handle),
-            )
+            try:
+                get_running_loop()  # raises RuntimeError if there is no event loop running
+                schedule(
+                    "WalletSession/del",
+                    schedule_blocking_io_task(self._wallet.release_handle),
+                )
+            except RuntimeError:
+                # fallback to synchronously releasing wallet handle
+                self._wallet.release_handle()
 
     def sign_transactions(
         self,
@@ -437,7 +446,7 @@ class KmdService:
         return Wallet._to_wallet(recovered_wallet)
 
     async def connect(
-        self, name: str, password: str, algod_client: AlgodClient
+        self, name: str, password: str, algod_client: AlgodClient | AsyncAlgodClient
     ) -> WalletSession:
         """
         Connect to a wallet
