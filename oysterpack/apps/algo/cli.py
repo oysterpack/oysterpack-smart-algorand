@@ -49,21 +49,25 @@ def list_wallets(ctx: click.Context):
 @click.pass_context
 def create_wallet(ctx: click.Context):
     app = cast(App, ctx.obj)
-    with asyncio.Runner() as runner:
 
-        def get_name() -> str:
-            return cast(str, click.prompt("Wallet Name", type=str)).strip()
+    async def wallet_exists(name: str) -> bool:
+        wallet = await app.kmd.get_wallet(name)
+        return wallet is not None
 
-        while len(name := get_name()) == 0:
+    async def get_name() -> str:
+        while (
+            len(name := cast(str, click.prompt("Wallet Name", type=str)).strip()) == 0
+        ):
             click.echo("Error: wallet name cannot be blank")
 
-        wallets = runner.run(app.kmd.list_wallets())
-        while any(wallet.name == name for wallet in wallets):
+        if await wallet_exists(name):
             click.echo("Error: wallet with the same name already exists")
-            while len(name := get_name()) == 0:
-                click.echo("Error: wallet name cannot be blank")
+            return await get_name()
 
-        password = cast(
+        return name
+
+    def get_password() -> str:
+        return cast(
             str,
             click.prompt(
                 "Wallet Password",
@@ -73,11 +77,24 @@ def create_wallet(ctx: click.Context):
             ),
         )
 
+    with asyncio.Runner() as runner:
+        name = runner.run(get_name())
+        password = get_password()
         try:
             runner.run(app.kmd.create_wallet(name, password))
             click.echo("Wallet was successfully created")
         except Exception as err:
             ctx.fail(str(err))
+
+
+@kmd.command()
+@click.pass_context
+def recover_wallet(ctx: click.Context):
+    """
+    Recover a wallet using a master derivation key mnemonic.
+
+    The recovered wallet will be empty. Keys will need to be regenerated.
+    """
 
 
 if __name__ == "__main__":
