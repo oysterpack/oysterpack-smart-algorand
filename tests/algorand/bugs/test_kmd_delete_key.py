@@ -1,13 +1,13 @@
 import unittest
 
 from algosdk.wallet import Wallet
-from beaker import sandbox
+from beaker import localnet
 
 
 class KmdWalletDeleteKeyTestCase(unittest.TestCase):
     @unittest.skip("https://github.com/algorand/go-algorand/issues/5346")
     def test_delete_key(self):
-        kmd_client = sandbox.kmd.get_client()
+        kmd_client = localnet.kmd.get_client()
 
         # create new wallet
         name = "foo"

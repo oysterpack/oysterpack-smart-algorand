@@ -6,7 +6,7 @@ from algosdk.atomic_transaction_composer import (
 )
 from algosdk.transaction import PaymentTxn
 from algosdk.util import algos_to_microalgos
-from beaker import sandbox
+from beaker import localnet
 
 from oysterpack.algorand.accounts import get_auth_address
 from oysterpack.algorand.keys import AlgoPrivateKey
@@ -22,7 +22,7 @@ from tests.test_support import fund_account
 
 class TransactionsTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_rekeying(self):
-        algod_client = sandbox.get_algod_client()
+        algod_client = localnet.get_algod_client()
         account_1 = AlgoPrivateKey()
         account_2 = AlgoPrivateKey()
 
@@ -39,7 +39,7 @@ class TransactionsTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             account_2.signing_address,
             await get_auth_address(
-                account_1.signing_address, sandbox.get_algod_client()
+                account_1.signing_address, localnet.get_algod_client()
             ),
         )
 
@@ -54,12 +54,12 @@ class TransactionsTestCase(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 account_1.signing_address,
                 await get_auth_address(
-                    account_1.signing_address, sandbox.get_algod_client()
+                    account_1.signing_address, localnet.get_algod_client()
                 ),
             )
 
     async def test_send_transaction(self):
-        algod_client = sandbox.get_algod_client()
+        algod_client = localnet.get_algod_client()
         account_1 = AlgoPrivateKey()
         account_2 = AlgoPrivateKey()
 
@@ -74,7 +74,7 @@ class TransactionsTestCase(unittest.IsolatedAsyncioTestCase):
         await send_transaction(algod_client, signed_txn)
 
     async def test_suggested_params_with_flat_flee(self):
-        algod_client = sandbox.get_algod_client()
+        algod_client = localnet.get_algod_client()
         sp = await suggested_params_with_flat_flee(algod_client)
         self.assertTrue(sp.flat_fee)
         self.assertEqual(sp.min_fee, sp.fee)

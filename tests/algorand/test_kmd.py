@@ -14,7 +14,7 @@ from algosdk.transaction import (
     wait_for_confirmation,
 )
 from algosdk.util import algos_to_microalgos
-from beaker import sandbox
+from beaker import localnet
 from password_validator import PasswordValidator
 from ulid import ULID
 
@@ -35,32 +35,33 @@ WALLET_WITH_SAME_NAME_ALREADY_EXISTS = "wallet with same name already exists"
 class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_list_wallets(self):
         kmd_service = KmdService(
-            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
-            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            url=localnet.kmd.DEFAULT_KMD_ADDRESS,
+            token=localnet.kmd.DEFAULT_KMD_TOKEN,
         )
         wallets = await kmd_service.list_wallets()
         self.assertTrue(
             any(
-                sandbox.kmd.DEFAULT_KMD_WALLET_NAME == wallet.name for wallet in wallets
+                localnet.kmd.DEFAULT_KMD_WALLET_NAME == wallet.name
+                for wallet in wallets
             )
         )
 
     async def test_get_wallet(self):
         kmd_service = KmdService(
-            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
-            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            url=localnet.kmd.DEFAULT_KMD_ADDRESS,
+            token=localnet.kmd.DEFAULT_KMD_TOKEN,
         )
-        wallet = await kmd_service.get_wallet(sandbox.kmd.DEFAULT_KMD_WALLET_NAME)
+        wallet = await kmd_service.get_wallet(localnet.kmd.DEFAULT_KMD_WALLET_NAME)
         self.assertIsNotNone(wallet)
-        self.assertEqual(sandbox.kmd.DEFAULT_KMD_WALLET_NAME, wallet.name)
+        self.assertEqual(localnet.kmd.DEFAULT_KMD_WALLET_NAME, wallet.name)
 
         with self.subTest("wallet does not exist"):
             self.assertIsNone(await kmd_service.get_wallet(str(ULID())))
 
     async def test_create_wallet(self):
         kmd_service = KmdService(
-            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
-            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            url=localnet.kmd.DEFAULT_KMD_ADDRESS,
+            token=localnet.kmd.DEFAULT_KMD_TOKEN,
         )
 
         with self.subTest("create new wallet with unique name"):
@@ -113,8 +114,8 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
             .spaces()
         )
         kmd_service = KmdService(
-            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
-            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            url=localnet.kmd.DEFAULT_KMD_ADDRESS,
+            token=localnet.kmd.DEFAULT_KMD_TOKEN,
             password_validator=password_validator,
         )
 
@@ -138,8 +139,8 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_recover_wallet(self):
         kmd_service = KmdService(
-            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
-            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            url=localnet.kmd.DEFAULT_KMD_ADDRESS,
+            token=localnet.kmd.DEFAULT_KMD_TOKEN,
         )
 
         with self.subTest("recover wallet using a unique name"):
@@ -217,8 +218,8 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
             .spaces()
         )
         kmd_service = KmdService(
-            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
-            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            url=localnet.kmd.DEFAULT_KMD_ADDRESS,
+            token=localnet.kmd.DEFAULT_KMD_TOKEN,
             password_validator=password_validator,
         )
         mdk = AlgoPrivateKey().mnemonic
@@ -255,8 +256,8 @@ class KmdServiceTestCase(unittest.IsolatedAsyncioTestCase):
 class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.kmd_service = KmdService(
-            url=sandbox.kmd.DEFAULT_KMD_ADDRESS,
-            token=sandbox.kmd.DEFAULT_KMD_TOKEN,
+            url=localnet.kmd.DEFAULT_KMD_ADDRESS,
+            token=localnet.kmd.DEFAULT_KMD_TOKEN,
         )
 
         # create a new wallet
@@ -269,13 +270,13 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_connect(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         self.assertEqual(self.name, wallet_session.wallet_name)
 
     async def test_export_master_derivation_key(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         mdk = await wallet_session.export_master_derivation_key()
 
@@ -289,7 +290,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_rename(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         new_name = str(ULID())
         await wallet_session.rename(new_name)
@@ -310,7 +311,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
         with self.subTest("rename using a name that already exists"):
             with self.assertRaises(KMDHTTPError) as err:
-                await wallet_session.rename(sandbox.kmd.DEFAULT_KMD_WALLET_NAME)
+                await wallet_session.rename(localnet.kmd.DEFAULT_KMD_WALLET_NAME)
             err_object = json.loads(str(err.exception))
             self.assertEqual(
                 WALLET_WITH_SAME_NAME_ALREADY_EXISTS, err_object["message"]
@@ -318,7 +319,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_account_management(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         self.assertEqual(0, len(await wallet_session.list_accounts()))
 
@@ -342,7 +343,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_export_private_key(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
 
         sender = await wallet_session.generate_account()
@@ -356,7 +357,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             sender=sender,
             receiver=receiver.signing_address,
             amt=algos_to_microalgos(1),
-            sp=sandbox.get_algod_client().suggested_params(),
+            sp=localnet.get_algod_client().suggested_params(),
         )
         signed_txn_1 = await wallet_session.sign_transaction(payment_txn)
         signed_txn_2 = payment_txn.sign(private_key_mnemonic.to_private_key())
@@ -364,7 +365,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_sign_transaction(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         sender = await wallet_session.generate_account()
         await fund_account(sender)
@@ -381,13 +382,13 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 receiver=receiver,
                 amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
                 sp=await schedule_blocking_io_task(
-                    sandbox.get_algod_client().suggested_params
+                    localnet.get_algod_client().suggested_params
                 ),
             )
 
             signed_txn = await wallet_session.sign_transaction(txn)
             # verify signed transaction by sending it and ensuring it is successful
-            algod_client = sandbox.get_algod_client()
+            algod_client = localnet.get_algod_client()
             txid = await schedule_blocking_io_task(
                 algod_client.send_transaction, signed_txn
             )
@@ -408,7 +409,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_transaction_signer(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         sender = await wallet_session.generate_account()
         await fund_account(sender)
@@ -419,7 +420,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             receiver=receiver,
             amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
             sp=await schedule_blocking_io_task(
-                sandbox.get_algod_client().suggested_params
+                localnet.get_algod_client().suggested_params
             ),
         )
 
@@ -430,11 +431,11 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 wallet_session,
             )
         )
-        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+        await schedule_blocking_io_task(atc.execute, localnet.get_algod_client(), 2)
 
     async def test_rekeying(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         sender = await wallet_session.generate_account()
         await fund_account(sender)
@@ -444,17 +445,17 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
         await wallet_session.rekey(sender, auth_account)
         self.assertEqual(
-            auth_account, await get_auth_address(sender, sandbox.get_algod_client())
+            auth_account, await get_auth_address(sender, localnet.get_algod_client())
         )
 
         await wallet_session.rekey_back(sender)
         self.assertEqual(
-            sender, await get_auth_address(sender, sandbox.get_algod_client())
+            sender, await get_auth_address(sender, localnet.get_algod_client())
         )
 
     async def test_multisig(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         account_1 = await wallet_session.generate_account()
         account_2 = await wallet_session.generate_account()
@@ -531,7 +532,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_sign_multisig_txn(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         account_1 = await wallet_session.generate_account()
         account_2 = await wallet_session.generate_account()
@@ -549,7 +550,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             sender=multisig.address(),
             receiver=account_3,
             amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
-            sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+            sp=await suggested_params_with_flat_flee(localnet.get_algod_client()),
         )
         atc = AtomicTransactionComposer()
         atc.add_transaction(
@@ -558,7 +559,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 signer=wallet_session,
             )
         )
-        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+        await schedule_blocking_io_task(atc.execute, localnet.get_algod_client(), 2)
 
         with self.subTest("multisig is not in the wallet"):
             await wallet_session.delete_multisig(multisig.address())
@@ -576,7 +577,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 sender=multisig.address(),
                 receiver=account_3,
                 amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
-                sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+                sp=await suggested_params_with_flat_flee(localnet.get_algod_client()),
             )
             signed_multisig_txn = await wallet_session.sign_multisig_transaction(
                 txn=MultisigTransaction(txn, multisig),
@@ -586,7 +587,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 txn=signed_multisig_txn,
                 account=account_2,
             )
-            await send_transaction(sandbox.get_algod_client(), signed_multisig_txn)
+            await send_transaction(localnet.get_algod_client(), signed_multisig_txn)
 
         with self.subTest("sign using account that is not part of multisig"):
             with self.assertRaises(AssertionError) as err:
@@ -611,7 +612,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_sign_multisig_txn_using_rekeyed(self):
         wallet_session = await self.kmd_service.connect(
-            self.name, self.password, sandbox.get_algod_client()
+            self.name, self.password, localnet.get_algod_client()
         )
         main_account = await wallet_session.generate_account()
         account_1 = await wallet_session.generate_account()
@@ -629,7 +630,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             account=main_account,
             rekey_to=multisig.address(),
             suggested_params=await suggested_params_with_flat_flee(
-                sandbox.get_algod_client()
+                localnet.get_algod_client()
             ),
         )
         atc = AtomicTransactionComposer()
@@ -639,7 +640,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 signer=wallet_session,
             )
         )
-        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+        await schedule_blocking_io_task(atc.execute, localnet.get_algod_client(), 2)
 
         # send a payment from the main_account to account_3
         # the transaction is signed by the multisig
@@ -648,7 +649,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
             sender=main_account,
             receiver=account_3,
             amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
-            sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+            sp=await suggested_params_with_flat_flee(localnet.get_algod_client()),
         )
         atc = AtomicTransactionComposer()
         atc.add_transaction(
@@ -657,14 +658,14 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 signer=wallet_session,
             )
         )
-        await schedule_blocking_io_task(atc.execute, sandbox.get_algod_client(), 2)
+        await schedule_blocking_io_task(atc.execute, localnet.get_algod_client(), 2)
 
         with self.subTest("using specified accounts"):
             txn = PaymentTxn(
                 sender=main_account,
                 receiver=account_3,
                 amt=algos_to_microalgos(decimal.Decimal(0.1)),  # type: ignore
-                sp=await suggested_params_with_flat_flee(sandbox.get_algod_client()),
+                sp=await suggested_params_with_flat_flee(localnet.get_algod_client()),
             )
             multisig_txn = await wallet_session.sign_multisig_transaction(
                 MultisigTransaction(txn, multisig),
@@ -674,7 +675,7 @@ class WalletSessionServiceTestCase(unittest.IsolatedAsyncioTestCase):
                 multisig_txn,
                 account_2,
             )
-            await send_transaction(sandbox.get_algod_client(), multisig_txn)
+            await send_transaction(localnet.get_algod_client(), multisig_txn)
 
 
 if __name__ == "__main__":

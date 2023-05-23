@@ -7,7 +7,7 @@ from algosdk import constants, transaction
 from algosdk.account import generate_account
 from algosdk.transaction import assign_group_id
 from algosdk.util import algos_to_microalgos
-from beaker import sandbox
+from beaker import localnet
 
 from oysterpack.algorand import Mnemonic, keys
 from oysterpack.algorand.keys import AlgoPrivateKey
@@ -123,7 +123,7 @@ class AlgoPrivateKeyTestCase(unittest.TestCase):
             payment = transaction.PaymentTxn(
                 sender=sender.signing_address,
                 receiver=recipient.signing_address,
-                sp=sandbox.get_algod_client().suggested_params(),
+                sp=localnet.get_algod_client().suggested_params(),
                 amt=algos_to_microalgos(1),
             )
             sender.sign_transactions(txn_group=[payment], indexes=[0])
@@ -135,7 +135,7 @@ class AlgoPrivateKeyTestCase(unittest.TestCase):
                     transaction.PaymentTxn(
                         sender=sender.signing_address,
                         receiver=recipient.signing_address,
-                        sp=sandbox.get_algod_client().suggested_params(),
+                        sp=localnet.get_algod_client().suggested_params(),
                         amt=algos_to_microalgos(1),
                     )
                 )

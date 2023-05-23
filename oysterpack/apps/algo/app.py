@@ -9,7 +9,7 @@ import tomllib
 from algosdk.v2client.algod import AlgodClient
 
 from oysterpack.algorand.algod import AsyncAlgodClient
-from oysterpack.algorand.kmd import KmdService, Wallet
+from oysterpack.algorand.kmd import KmdService
 
 
 @dataclass(slots=True)
@@ -74,7 +74,7 @@ class App:
         """
         Checks the KMD and algod node connections.
 
-        :raises AssertionErrror: if fails to get wallet listing from KMD server
+        :raises AssertionError: if fails to get wallet listing from KMD server
         :raises AssertionError: if the algod node is not caught up
         """
         try:
@@ -83,6 +83,3 @@ class App:
             raise AssertionError("Failed to connect to KMD node") from err
 
         await self.algod.check_node_status()
-
-    async def list_wallets(self) -> list[Wallet]:
-        return await self.kmd.list_wallets()

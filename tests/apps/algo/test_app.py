@@ -2,19 +2,20 @@ import unittest
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from beaker import localnet
 from ulid import ULID
 
 from oysterpack.apps.algo.app import App, AppConfig
 
-sandbox_config = b"""
+localnet_config = f"""
 [algod]
-token="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-url="http://localhost:4001"
+token="{localnet.clients.DEFAULT_ALGOD_TOKEN}"
+url="{localnet.clients.DEFAULT_ALGOD_ADDRESS}"
 
 [kmd]
-token="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-url="http://localhost:4002"
-"""
+token="{localnet.kmd.DEFAULT_KMD_TOKEN}"
+url="{localnet.kmd.DEFAULT_KMD_ADDRESS}"
+""".encode()
 
 
 class AppConfigTestCase(unittest.TestCase):
@@ -60,12 +61,12 @@ class AppTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_check_connections(self):
         with self.subTest("valid config"):
             with NamedTemporaryFile() as config_file:
-                config_file.write(sandbox_config)
+                config_file.write(localnet_config)
                 config_file.flush()
                 app_config = AppConfig.from_config_file(Path(config_file.name))
                 app = App(app_config)
                 await app.check_connections()
-                wallets = await app.list_wallets()
+                wallets = await app.kmd.list_wallets()
                 self.assertTrue(len(wallets) > 0)
 
         with self.subTest("invalid algod config"):

@@ -5,7 +5,7 @@ import unittest
 
 from algosdk import constants, mnemonic
 from algosdk.account import generate_account
-from beaker.sandbox.kmd import get_sandbox_default_wallet
+from beaker.localnet.kmd import get_localnet_default_wallet
 
 from oysterpack.algorand import AppId, Mnemonic
 from oysterpack.core.logging import configure_logging
@@ -34,7 +34,7 @@ class ModelTestCase(unittest.TestCase):
             logger.error(err.exception)
 
         with self.subTest("kmd master derivation key"):
-            wallet = get_sandbox_default_wallet()
+            wallet = get_localnet_default_wallet()
             mnemonic1 = Mnemonic.from_word_list(wallet.get_mnemonic())
             self.assertEqual(
                 wallet.export_master_derivation_key(),

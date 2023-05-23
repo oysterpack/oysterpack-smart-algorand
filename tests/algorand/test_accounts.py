@@ -1,7 +1,7 @@
 import unittest
 
 from algosdk.transaction import wait_for_confirmation
-from beaker import sandbox
+from beaker import localnet
 
 from oysterpack.algorand.accounts import get_algo_balance, get_auth_address
 from oysterpack.algorand.keys import AlgoPrivateKey
@@ -15,12 +15,12 @@ class AccountsTestCase(unittest.IsolatedAsyncioTestCase):
         with self.subTest("account is not rekeyed"):
             account = AlgoPrivateKey()
             auth_acct = await get_auth_address(
-                account.signing_address, sandbox.get_algod_client()
+                account.signing_address, localnet.get_algod_client()
             )
             self.assertEqual(account.signing_address, auth_acct)
 
         with self.subTest("account is rekeyed"):
-            algod_client = sandbox.get_algod_client()
+            algod_client = localnet.get_algod_client()
             account_2 = AlgoPrivateKey()
             await fund_account(account.signing_address)
             txn = create_rekey_txn(
@@ -35,13 +35,13 @@ class AccountsTestCase(unittest.IsolatedAsyncioTestCase):
             await schedule_blocking_io_task(wait_for_confirmation, algod_client, txid)
 
             auth_acct = await get_auth_address(
-                account.signing_address, sandbox.get_algod_client()
+                account.signing_address, localnet.get_algod_client()
             )
             self.assertEqual(account_2.signing_address, auth_acct)
 
     async def test_get_algo_balance(self):
         account = AlgoPrivateKey()
-        algod_client = sandbox.get_algod_client()
+        algod_client = localnet.get_algod_client()
         algo_balance = await get_algo_balance(account.signing_address, algod_client)
         self.assertEqual(0, algo_balance)
 
