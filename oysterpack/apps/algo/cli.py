@@ -75,7 +75,7 @@ def create_wallet(ctx: click.Context):
 
         try:
             runner.run(app.kmd.create_wallet(name, password))
-            click.echo("wallet was successfully created")
+            click.echo("Wallet was successfully created")
         except Exception as err:
             ctx.fail(str(err))
 
