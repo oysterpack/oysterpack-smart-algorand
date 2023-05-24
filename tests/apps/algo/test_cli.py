@@ -34,7 +34,7 @@ class CliTestCase(unittest.TestCase):
 
             result = runner.invoke(
                 cast(BaseCommand, cli),
-                ["kmd", "--config-file", ALGO_CONFIG_FILE, "list-wallets"],
+                ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "list"],
             )
             self.assertEqual(0, result.exit_code)
 
@@ -67,7 +67,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "create-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "create"],
                     input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\n",
                 )
                 self.assertEqual(0, result.exit_code)
@@ -93,7 +93,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "create-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "create"],
                     input=f"{preexisting_wallet_name}\n{wallet_name}\n{wallet_password}\n{wallet_password}\n",
                 )
                 self.assertEqual(0, result.exit_code)
@@ -126,7 +126,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "create-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "create"],
                     input=f"{preexisting_wallet_name}\n{blank_name}\n{wallet_name}\n{wallet_password}\n{wallet_password}\n",
                 )
                 self.assertEqual(0, result.exit_code)
@@ -157,7 +157,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "create-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "create"],
                     input=f" \n{wallet_name}\n{wallet_password}\n{wallet_password}\n",
                 )
                 self.assertEqual(0, result.exit_code)
@@ -185,7 +185,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "create-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "create"],
                     input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\n",
                 )
                 self.assertNotEqual(result.exit_code, 0)
@@ -210,7 +210,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "create-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "create"],
                     input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\n",
                 )
                 self.assertEqual(0, result.exit_code)
@@ -219,9 +219,10 @@ class CliTestCase(unittest.TestCase):
                     cast(BaseCommand, cli),
                     [
                         "kmd",
+                        "wallets",
                         "--config-file",
                         ALGO_CONFIG_FILE,
-                        "export-wallet-master-derivation-key",
+                        "export-master-derivation-key",
                     ],
                     input=f"{wallet_name_not_exists}\n{wallet_name}\n{wallet_password}\n",
                 )
@@ -237,7 +238,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "recover-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "recover"],
                     input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\n{mdk}",
                 )
                 self.assertEqual(0, result.exit_code)
@@ -252,9 +253,10 @@ class CliTestCase(unittest.TestCase):
                     cast(BaseCommand, cli),
                     [
                         "kmd",
+                        "wallets",
                         "--config-file",
                         ALGO_CONFIG_FILE,
-                        "export-wallet-master-derivation-key",
+                        "export-master-derivation-key",
                     ],
                     input=f"{wallet_name}\n{wallet_password}\n",
                 )
@@ -269,7 +271,7 @@ class CliTestCase(unittest.TestCase):
 
                 result = runner.invoke(
                     cast(BaseCommand, cli),
-                    ["kmd", "--config-file", ALGO_CONFIG_FILE, "recover-wallet"],
+                    ["kmd", "wallets", "--config-file", ALGO_CONFIG_FILE, "recover"],
                     input=f"{wallet_name}\n{wallet_password}\n{wallet_password}\ninvalid mdk",
                 )
                 self.assertNotEqual(0, result.exit_code)

@@ -20,6 +20,13 @@ def cli():
 
 
 @cli.group()
+def kmd():
+    """
+    KMD Client
+    """
+
+
+@kmd.group()
 @click.option(
     "--config-file",
     required=True,
@@ -28,18 +35,21 @@ def cli():
     default="algo.toml",
 )
 @click.pass_context
-def kmd(ctx: click.Context, config_file: Path):
+def wallets(ctx: click.Context, config_file: Path):
     """
-    KMD Client
+    Wallets
     """
     app_config = AppConfig.from_config_file(config_file)
     app = App(app_config)
     ctx.obj = app
 
 
-@kmd.command()
+@wallets.command(name="list")
 @click.pass_context
 def list_wallets(ctx: click.Context):
+    """
+    List wallets
+    """
     app = cast(App, ctx.obj)
     with asyncio.Runner() as runner:
         wallets = runner.run(app.kmd.list_wallets())
@@ -86,9 +96,12 @@ def get_password(*, confirm_password: bool = True) -> str:
     )
 
 
-@kmd.command()
+@wallets.command(name="create")
 @click.pass_context
 def create_wallet(ctx: click.Context):
+    """
+    Create new wallet
+    """
     app = cast(App, ctx.obj)
 
     with asyncio.Runner() as runner:
@@ -101,9 +114,12 @@ def create_wallet(ctx: click.Context):
             ctx.fail(str(err))
 
 
-@kmd.command()
+@wallets.command(name="export-master-derivation-key")
 @click.pass_context
 def export_wallet_master_derivation_key(ctx: click.Context):
+    """
+    Exports wallet's master derivation key, which is used to recover the wallet.
+    """
     app = cast(App, ctx.obj)
 
     with asyncio.Runner() as runner:
@@ -117,7 +133,7 @@ def export_wallet_master_derivation_key(ctx: click.Context):
             ctx.fail(str(err))
 
 
-@kmd.command()
+@wallets.command(name="recover")
 @click.pass_context
 def recover_wallet(ctx: click.Context):
     """
