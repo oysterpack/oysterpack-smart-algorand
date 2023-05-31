@@ -168,5 +168,64 @@ def recover_wallet(ctx: click.Context):
             ctx.fail(str(err))
 
 
+@kmd.group()
+@click.option(
+    "--config-file",
+    required=True,
+    prompt="Config File",
+    type=click.Path(exists=True, resolve_path=True, readable=True, path_type=Path),
+    default="algo.toml",
+)
+@click.pass_context
+def accounts(ctx: click.Context, config_file: Path):
+    """
+    Accounts
+    """
+    app_config = AppConfig.from_config_file(config_file)
+    app = App(app_config)
+    ctx.obj = app
+
+
+@accounts.command(name="list")
+@click.pass_context
+def list_accounts(ctx: click.Context):
+    """
+    List wallet accounts
+    """
+    app = cast(App, ctx.obj)
+
+    with asyncio.Runner() as runner:
+        name = runner.run(get_name(app, mode=GetNameMode.MustExist))
+        password = get_password(confirm_password=False)
+        try:
+            wallet_session = runner.run(app.kmd.connect(name, password, app.algod))
+            accounts = runner.run(wallet_session.list_accounts())
+            for account in sorted(accounts):
+                click.echo(account)
+        except Exception as err:
+            ctx.fail(str(err))
+
+
+@accounts.command(name="generate")
+@click.option("--count", prompt="Count", default=1)
+@click.pass_context
+def generate_accounts(ctx: click.Context, count: int):
+    """
+    Generate wallet accounts
+    """
+    app = cast(App, ctx.obj)
+
+    with asyncio.Runner() as runner:
+        name = runner.run(get_name(app, mode=GetNameMode.MustExist))
+        password = get_password(confirm_password=False)
+        try:
+            wallet_session = runner.run(app.kmd.connect(name, password, app.algod))
+            for _ in range(count):
+                account = runner.run(wallet_session.generate_account())
+                click.echo(account)
+        except Exception as err:
+            ctx.fail(str(err))
+
+
 if __name__ == "__main__":
     cli()
